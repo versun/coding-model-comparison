@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>模型编程性能测试汇总</title>
+        <style>
+            :root {
+                --bg: #f4f7fb;
+                --panel: #ffffff;
+                --text: #1d2533;
+                --muted: #5d6a80;
+                --line: #d5deeb;
+                --accent: #0b5fff;
+                --ok-bg: #e8f8ef;
+                --ok-text: #0f6b3e;
+                --bad-bg: #fdecec;
+                --bad-text: #9f1f1f;
+                --shadow: 0 10px 30px rgba(18, 41, 84, 0.08);
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                color: var(--text);
+                font-family:
+                    "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
+                    "Microsoft YaHei", sans-serif;
+                background:
+                    radial-gradient(
+                        80rem 40rem at 85% -20%,
+                        #dce9ff 0%,
+                        rgba(220, 233, 255, 0) 60%
+                    ),
+                    radial-gradient(
+                        55rem 35rem at -5% -10%,
+                        #e8f4ff 0%,
+                        rgba(232, 244, 255, 0) 55%
+                    ),
+                    var(--bg);
+            }
+
+            .container {
+                max-width: 1600px;
+                margin: 0 auto;
+                padding: 2rem 1rem 3rem;
+            }
+
+            .hero {
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                padding: 1.25rem 1.4rem;
+                box-shadow: var(--shadow);
+                margin-bottom: 1rem;
+            }
+
+            h1,
+            h2 {
+                margin: 0;
+                font-weight: 700;
+                letter-spacing: 0.01em;
+            }
+
+            h1 {
+                font-size: clamp(1.25rem, 2.4vw, 1.7rem);
+            }
+
+            h2 {
+                font-size: 1.05rem;
+            }
+
+            .sub {
+                color: var(--muted);
+                margin-top: 0.55rem;
+                font-size: 0.95rem;
+            }
+
+            .summary {
+                display: grid;
+                gap: 0.85rem;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                margin-bottom: 1rem;
+            }
+
+            .card {
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 14px;
+                padding: 0.9rem 1rem;
+                box-shadow: var(--shadow);
+            }
+
+            .card .label {
+                color: var(--muted);
+                font-size: 0.85rem;
+            }
+
+            .card .value {
+                margin-top: 0.35rem;
+                font-size: 1.35rem;
+                font-weight: 700;
+                font-family:
+                    "JetBrains Mono", "SFMono-Regular", Menlo, Consolas,
+                    monospace;
+            }
+
+            .card .meta {
+                margin-top: 0.35rem;
+                color: var(--muted);
+                font-size: 0.82rem;
+            }
+
+            .panel {
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                padding: 1rem;
+                box-shadow: var(--shadow);
+            }
+
+            .table-wrap {
+                margin-top: 0.85rem;
+                overflow-x: auto;
+                border: 1px solid var(--line);
+                border-radius: 12px;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                min-width: 760px;
+            }
+
+            th,
+            td {
+                padding: 0.7rem 0.75rem;
+                border-bottom: 1px solid var(--line);
+                text-align: left;
+                vertical-align: middle;
+                font-size: 0.93rem;
+                white-space: nowrap;
+            }
+
+            th {
+                background: #f7faff;
+                color: #263246;
+                font-weight: 700;
+            }
+
+            tr:last-child td {
+                border-bottom: none;
+            }
+
+            .model {
+                font-weight: 700;
+            }
+
+            .mark {
+                display: inline-block;
+                padding: 0.18rem 0.45rem;
+                border-radius: 999px;
+                font-size: 0.8rem;
+                font-weight: 700;
+                line-height: 1.2;
+            }
+
+            .yes {
+                background: var(--ok-bg);
+                color: var(--ok-text);
+            }
+
+            .no {
+                background: var(--bad-bg);
+                color: var(--bad-text);
+            }
+
+            .link {
+                color: var(--accent);
+                text-decoration: none;
+                font-weight: 600;
+            }
+
+            .link:hover {
+                text-decoration: underline;
+            }
+
+            .hint {
+                margin-top: 0.7rem;
+                color: var(--muted);
+                font-size: 0.88rem;
+            }
+
+            .prompt-panel {
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 18px;
+                padding: 0.2rem 1rem;
+                box-shadow: var(--shadow);
+                margin-bottom: 1rem;
+            }
+
+            .prompt-box {
+                margin: 0.45rem 0;
+            }
+
+            .prompt-box > summary {
+                cursor: pointer;
+                list-style: none;
+                font-weight: 700;
+                color: #25314a;
+                padding: 0.35rem 0;
+                user-select: none;
+            }
+
+            .prompt-box > summary::-webkit-details-marker {
+                display: none;
+            }
+
+            .prompt-box > summary::before {
+                content: "▸";
+                display: inline-block;
+                margin-right: 0.5rem;
+                transition: transform 0.2s ease;
+                color: var(--accent);
+            }
+
+            .prompt-box[open] > summary::before {
+                transform: rotate(90deg);
+            }
+
+            .prompt-content {
+                margin: 0.45rem 0 0.75rem;
+                background: #0d1422;
+                color: #dce7ff;
+                border: 1px solid #1f2b42;
+                border-radius: 12px;
+                padding: 0.85rem 0.95rem;
+                white-space: pre-wrap;
+                line-height: 1.55;
+                font-size: 0.9rem;
+                overflow-x: auto;
+                font-family:
+                    "JetBrains Mono", "SFMono-Regular", Menlo, Consolas,
+                    monospace;
+            }
+
+            @media (max-width: 780px) {
+                .summary {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main class="container">
+            <section class="hero">
+                <h1>模型编程性能测试汇总</h1>
+                <p class="sub">测试时间：2026年2月13日</p>
+            </section>
+
+            <section class="prompt-panel">
+                <details class="prompt-box">
+                    <summary>测试提示词</summary>
+                    <pre class="prompt-content">
+不要使用任何的mcp和skill，请编写一个单文件的 HTML/JS 应用（不使用构建工具，使用 CDN 引入 React 和 D3.js）。
+功能：
+
+生成 100 个随机数据点。
+
+绘制一个力导向图（Force-directed Graph）。
+
+实现交互：鼠标悬停节点显示 Tooltip，点击节点高亮其相邻节点，支持滚轮缩放画布。
+
+UI 风格要求现代、极简、暗色模式。</pre
+                    >
+                </details>
+            </section>
+
+            <section class="summary" id="summary"></section>
+
+            <section class="panel">
+                <h2>测试明细</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead id="tableHead"></thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+                <p class="hint">点击“成果”可进入每个模型的独立页面。</p>
+            </section>
+        </main>
+
+        <script>
+            const modelLinks = {
+                "GLM 5": "glm-5.html",
+                "Opus 4.6": "opus-4.6.html",
+                "GPT 5.3 Codex": "gpt-5.3-codex.html",
+                "Kimi 2.5": "kimi-2.5.html",
+                "Minimax 2.5": "minimax-2.5.html",
+            };
+
+            const embeddedCsv = `表格 1
+,运行环境,完成时间,100 个随机数据点,悬停节点显示信息,点击高亮相邻节点,滚轮缩放画布,  完善的页面信息,完成度,
+GLM 5,Claude Code,2分 14秒,✅,✅,✅,✅,✅,5,
+Opus 4.6,Claude Code,53秒,✅,✅,✅,✅,❌,4,
+GPT 5.3 Codex,Codex CLI,1分 40秒,✅,✅,✅,✅,❌,4,
+Kimi 2.5,Claude Code,1分 53秒,✅,✅,❌,✅,✅,4,
+Minimax 2.5,Claude Code,2分 38秒,❌,❌,✅,✅,❌,2,`;
+
+            function splitCsvLine(line) {
+                const cells = [];
+                let cell = "";
+                let inQuotes = false;
+
+                for (let i = 0; i < line.length; i += 1) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === "," && !inQuotes) {
+                        cells.push(cell.trim());
+                        cell = "";
+                    } else {
+                        cell += char;
+                    }
+                }
+                cells.push(cell.trim());
+                return cells.map((value) =>
+                    value.replace(/\u00a0/g, " ").trim(),
+                );
+            }
+
+            function trimTrailingEmptyCells(row) {
+                const out = row.slice();
+                while (out.length > 0 && out[out.length - 1] === "") {
+                    out.pop();
+                }
+                return out;
+            }
+
+            function parseCsv(csvText) {
+                const rawRows = csvText
+                    .split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter((line) => line.length > 0)
+                    .map(splitCsvLine)
+                    .map(trimTrailingEmptyCells)
+                    .filter((row) => row.some((cell) => cell !== ""));
+
+                const headerIndex = rawRows.findIndex((row) =>
+                    row.includes("完成度"),
+                );
+                const safeHeaderIndex = headerIndex === -1 ? 0 : headerIndex;
+                const header = rawRows[safeHeaderIndex];
+                const dataRows = rawRows
+                    .slice(safeHeaderIndex + 1)
+                    .filter((row) => row[0] && row[0] !== "表格 1");
+
+                if (!header || dataRows.length === 0) {
+                    throw new Error("CSV 内容为空，或无法识别为测试结果表。");
+                }
+
+                if (!header[0]) {
+                    header[0] = "模型";
+                }
+
+                return { header, dataRows };
+            }
+
+            function completionScore(value) {
+                const score = Number.parseFloat(value);
+                return Number.isFinite(score) ? score : 0;
+            }
+
+            function parseDurationSeconds(value) {
+                if (!value) {
+                    return Number.NaN;
+                }
+
+                const text = String(value).replace(/\s+/g, "");
+                const minuteMatch = text.match(/(\d+(?:\.\d+)?)分/);
+                const secondMatch = text.match(/(\d+(?:\.\d+)?)秒/);
+                if (minuteMatch || secondMatch) {
+                    const minutes = minuteMatch
+                        ? Number.parseFloat(minuteMatch[1])
+                        : 0;
+                    const seconds = secondMatch
+                        ? Number.parseFloat(secondMatch[1])
+                        : 0;
+                    return minutes * 60 + seconds;
+                }
+
+                const colonMatch = text.match(/^(\d+):(\d{1,2})$/);
+                if (colonMatch) {
+                    return (
+                        Number.parseInt(colonMatch[1], 10) * 60 +
+                        Number.parseInt(colonMatch[2], 10)
+                    );
+                }
+
+                const pureNumber = Number.parseFloat(text);
+                return Number.isFinite(pureNumber) ? pureNumber : Number.NaN;
+            }
+
+            function renderSummary(header, dataRows) {
+                const summary = document.getElementById("summary");
+                const scoreIndex = header.findIndex((cell) =>
+                    cell.includes("完成度"),
+                );
+                const durationIndex = header.findIndex((cell) =>
+                    cell.includes("完成时间"),
+                );
+                const modelCount = dataRows.length;
+                const bestRow = dataRows
+                    .slice()
+                    .sort(
+                        (a, b) =>
+                            completionScore(b[scoreIndex]) -
+                            completionScore(a[scoreIndex]),
+                    )[0];
+                const bestModel = bestRow ? bestRow[0] : "-";
+
+                let fastestModel = "-";
+                let fastestRawTime = "-";
+                if (durationIndex >= 0) {
+                    const durationRows = dataRows
+                        .map((row) => ({
+                            model: row[0] || "-",
+                            rawTime: row[durationIndex] || "",
+                            seconds: parseDurationSeconds(row[durationIndex]),
+                        }))
+                        .filter((item) => Number.isFinite(item.seconds))
+                        .sort((a, b) => a.seconds - b.seconds);
+
+                    if (durationRows.length > 0) {
+                        fastestModel = durationRows[0].model;
+                        fastestRawTime = durationRows[0].rawTime || "-";
+                    }
+                }
+
+                summary.innerHTML = `
+        <article class="card">
+          <div class="label">参与模型数</div>
+          <div class="value">${modelCount}</div>
+        </article>
+        <article class="card">
+          <div class="label">最高完成度模型</div>
+          <div class="value">${bestModel}</div>
+        </article>
+        ${
+            durationIndex >= 0
+                ? `
+          <article class="card">
+            <div class="label">最快完成模型</div>
+            <div class="value">${fastestModel}</div>
+            <div class="meta">完成时间：${fastestRawTime}</div>
+          </article>
+        `
+                : ""
+        }
+      `;
+            }
+
+            function badge(value) {
+                if (value === "✅") {
+                    return '<span class="mark yes">通过</span>';
+                }
+                if (value === "❌") {
+                    return '<span class="mark no">未通过</span>';
+                }
+                return value || "-";
+            }
+
+            function renderTable(header, dataRows) {
+                const tableHead = document.getElementById("tableHead");
+                const tableBody = document.getElementById("tableBody");
+
+                tableHead.innerHTML = `
+        <tr>
+          ${header.map((cell) => `<th>${cell || "-"}</th>`).join("")}
+          <th>成果</th>
+        </tr>
+      `;
+
+                tableBody.innerHTML = dataRows
+                    .map((row) => {
+                        const model = row[0];
+                        const link = modelLinks[model];
+                        const cells = header
+                            .map((_, index) => {
+                                const raw = row[index] || "";
+                                if (index === 0) {
+                                    return `<td class="model">${raw || "-"}</td>`;
+                                }
+                                return `<td>${badge(raw)}</td>`;
+                            })
+                            .join("");
+                        const detailCell = link
+                            ? `<td><a class="link" href="${link}" target="_blank" rel="noopener noreferrer">查看</a></td>`
+                            : "<td>-</td>";
+                        return `<tr>${cells}${detailCell}</tr>`;
+                    })
+                    .join("");
+            }
+
+            async function loadAndRender() {
+                let csvText = embeddedCsv;
+
+                try {
+                    const response = await fetch("results.csv", {
+                        cache: "no-store",
+                    });
+                    if (!response.ok) {
+                        throw new Error("fetch failed");
+                    }
+                    csvText = await response.text();
+                } catch (error) {
+                    // Keep default data source text and fallback to embedded CSV.
+                }
+
+                try {
+                    const { header, dataRows } = parseCsv(csvText);
+                    renderSummary(header, dataRows);
+                    renderTable(header, dataRows);
+                } catch (error) {
+                    document.getElementById("tableHead").innerHTML = "";
+                    document.getElementById("tableBody").innerHTML =
+                        `<tr><td>解析 CSV 失败：${error.message}</td></tr>`;
+                }
+            }
+
+            loadAndRender();
+        </script>
+    </body>
+</html>

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Force-Directed Graph</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #root { width: 100%; height: 100%; }
+
+  .header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding: 16px 24px;
+    background: linear-gradient(180deg, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .header h1 {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #888;
+  }
+
+  .header .stats {
+    font-size: 12px;
+    color: #555;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .graph-container {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+
+  .graph-container:active { cursor: grabbing; }
+
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: rgba(20, 20, 30, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+    transition: opacity 0.15s ease;
+    max-width: 200px;
+  }
+
+  .tooltip .label {
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .tooltip .detail {
+    color: #888;
+    font-size: 11px;
+  }
+
+  .hint {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: #333;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+function generateGraphData(nodeCount) {
+  const groups = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
+  const palette = {
+    alpha:   '#6366f1',
+    beta:    '#22d3ee',
+    gamma:   '#f472b6',
+    delta:   '#facc15',
+    epsilon: '#34d399',
+  };
+
+  const nodes = Array.from({ length: nodeCount }, (_, i) => {
+    const group = groups[Math.floor(Math.random() * groups.length)];
+    return {
+      id: i,
+      label: `N-${String(i).padStart(3, '0')}`,
+      group,
+      color: palette[group],
+      radius: 3 + Math.random() * 6,
+      value: Math.round(Math.random() * 100),
+    };
+  });
+
+  const linkSet = new Set();
+  const links = [];
+
+  const edgeCount = Math.floor(nodeCount * 1.6);
+  while (links.length < edgeCount) {
+    const source = Math.floor(Math.random() * nodeCount);
+    const target = Math.floor(Math.random() * nodeCount);
+    if (source === target) continue;
+    const key = source < target ? `${source}-${target}` : `${target}-${source}`;
+    if (linkSet.has(key)) continue;
+    linkSet.add(key);
+    links.push({ source, target });
+  }
+
+  return { nodes, links, palette };
+}
+
+function buildAdjacency(nodes, links) {
+  const adj = new Map();
+  nodes.forEach(n => adj.set(n.id, new Set()));
+  links.forEach(l => {
+    const sid = typeof l.source === 'object' ? l.source.id : l.source;
+    const tid = typeof l.target === 'object' ? l.target.id : l.target;
+    adj.get(sid).add(tid);
+    adj.get(tid).add(sid);
+  });
+  return adj;
+}
+
+function ForceGraph() {
+  const svgRef = useRef(null);
+  const simRef = useRef(null);
+  const [tooltip, setTooltip] = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [graphData] = useState(() => generateGraphData(100));
+  const adjRef = useRef(null);
+
+  useEffect(() => {
+    const svg = d3.select(svgRef.current);
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    svg.attr('width', width).attr('height', height);
+
+    const g = svg.append('g');
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.2, 6])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform);
+      });
+
+    svg.call(zoom);
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2).scale(0.9));
+
+    const simulation = d3.forceSimulation(graphData.nodes)
+      .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(60))
+      .force('charge', d3.forceManyBody().strength(-120))
+      .force('center', d3.forceCenter(0, 0))
+      .force('collision', d3.forceCollide().radius(d => d.radius + 2));
+
+    simRef.current = simulation;
+    adjRef.current = buildAdjacency(graphData.nodes, graphData.links);
+
+    const linkElements = g.append('g')
+      .attr('class', 'links')
+      .selectAll('line')
+      .data(graphData.links)
+      .join('line')
+      .attr('stroke', 'rgba(255,255,255,0.06)')
+      .attr('stroke-width', 1);
+
+    const nodeElements = g.append('g')
+      .attr('class', 'nodes')
+      .selectAll('circle')
+      .data(graphData.nodes)
+      .join('circle')
+      .attr('r', d => d.radius)
+      .attr('fill', d => d.color)
+      .attr('stroke', 'transparent')
+      .attr('stroke-width', 2)
+      .style('cursor', 'pointer')
+      .style('transition', 'opacity 0.2s ease');
+
+    const drag = d3.drag()
+      .on('start', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      })
+      .on('drag', (event, d) => {
+        d.fx = event.x;
+        d.fy = event.y;
+      })
+      .on('end', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      });
+
+    nodeElements.call(drag);
+
+    nodeElements
+      .on('mouseover', (event, d) => {
+        const neighbors = adjRef.current.get(d.id);
+        setTooltip({
+          x: event.clientX,
+          y: event.clientY,
+          node: d,
+          neighborCount: neighbors ? neighbors.size : 0,
+        });
+      })
+      .on('mousemove', (event) => {
+        setTooltip(prev => prev ? { ...prev, x: event.clientX, y: event.clientY } : null);
+      })
+      .on('mouseout', () => {
+        setTooltip(null);
+      })
+      .on('click', (event, d) => {
+        event.stopPropagation();
+        setSelected(prev => (prev === d.id ? null : d.id));
+      });
+
+    svg.on('click', () => setSelected(null));
+
+    simulation.on('tick', () => {
+      linkElements
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+
+      nodeElements
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y);
+    });
+
+    const handleResize = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      svg.attr('width', w).attr('height', h);
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      simulation.stop();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    const svg = d3.select(svgRef.current);
+    const adj = adjRef.current;
+    if (!adj) return;
+
+    const neighbors = selected !== null ? adj.get(selected) : null;
+
+    svg.selectAll('.nodes circle')
+      .attr('opacity', d => {
+        if (selected === null) return 1;
+        if (d.id === selected) return 1;
+        if (neighbors && neighbors.has(d.id)) return 1;
+        return 0.08;
+      })
+      .attr('stroke', d => {
+        if (selected !== null && d.id === selected) return '#fff';
+        if (selected !== null && neighbors && neighbors.has(d.id)) return d.color;
+        return 'transparent';
+      });
+
+    svg.selectAll('.links line')
+      .attr('stroke', d => {
+        if (selected === null) return 'rgba(255,255,255,0.06)';
+        const sid = typeof d.source === 'object' ? d.source.id : d.source;
+        const tid = typeof d.target === 'object' ? d.target.id : d.target;
+        if (sid === selected || tid === selected) return 'rgba(255,255,255,0.25)';
+        return 'rgba(255,255,255,0.02)';
+      })
+      .attr('stroke-width', d => {
+        if (selected === null) return 1;
+        const sid = typeof d.source === 'object' ? d.source.id : d.source;
+        const tid = typeof d.target === 'object' ? d.target.id : d.target;
+        if (sid === selected || tid === selected) return 1.5;
+        return 0.5;
+      });
+  }, [selected]);
+
+  const tooltipStyle = tooltip ? {
+    left: tooltip.x + 12,
+    top: tooltip.y - 10,
+    opacity: 1,
+  } : { opacity: 0, left: -999, top: -999 };
+
+  return (
+    <>
+      <div className="header">
+        <h1>Force-Directed Graph</h1>
+        <span className="stats">
+          {graphData.nodes.length} nodes &middot; {graphData.links.length} edges
+        </span>
+      </div>
+
+      <svg ref={svgRef} className="graph-container" />
+
+      <div className="tooltip" style={tooltipStyle}>
+        {tooltip && (
+          <>
+            <div className="label">{tooltip.node.label}</div>
+            <div className="detail">
+              Group: {tooltip.node.group}<br />
+              Value: {tooltip.node.value}<br />
+              Connections: {tooltip.neighborCount}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="hint">
+        scroll to zoom &middot; drag nodes &middot; click to highlight neighbors
+      </div>
+    </>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<ForceGraph />);
+</script>
+</body>
+</html>

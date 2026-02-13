@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Force Graph · React + D3</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #121821;
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #e8edf5;
+      --muted: #8a93a3;
+      --node: #7aa2ff;
+      --node-dim: #3d485f;
+      --link: rgba(122, 162, 255, 0.24);
+      --link-dim: rgba(255, 255, 255, 0.08);
+      --active: #22d3ee;
+      --active-2: #f59e0b;
+      --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-family: "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at 20% 10%, #172131 0%, transparent 35%),
+        radial-gradient(circle at 80% 80%, #102a2b 0%, transparent 30%),
+        var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    #root {
+      width: 100%;
+      height: 100%;
+      padding: 24px;
+    }
+
+    .app {
+      width: 100%;
+      height: 100%;
+      border-radius: 18px;
+      border: 1px solid var(--panel-border);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+      backdrop-filter: blur(6px);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header {
+      position: absolute;
+      top: 16px;
+      left: 18px;
+      z-index: 10;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: rgba(18, 24, 33, 0.7);
+      pointer-events: none;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0.3px;
+      font-weight: 650;
+      color: var(--text);
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .stage {
+      width: 100%;
+      height: 100%;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    svg:active {
+      cursor: grabbing;
+    }
+
+    .tooltip {
+      position: absolute;
+      z-index: 20;
+      pointer-events: none;
+      min-width: 130px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: rgba(8, 12, 17, 0.9);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+      transform: translate(12px, 12px);
+    }
+
+    .tooltip .name {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0 0 3px;
+    }
+
+    .tooltip .meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin: 0;
+      line-height: 1.35;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+
+  <script>
+    const { useMemo, useRef, useEffect, useState } = React;
+
+    function makeGraph(nodeCount) {
+      const nodes = Array.from({ length: nodeCount }, (_, i) => ({
+        id: i,
+        label: `Node ${i + 1}`,
+        group: 1 + Math.floor(Math.random() * 6),
+        value: 8 + Math.floor(Math.random() * 12)
+      }));
+
+      const links = [];
+      const linkSet = new Set();
+
+      // Ensure the graph is connected by chaining nodes.
+      for (let i = 1; i < nodeCount; i += 1) {
+        const source = i;
+        const target = Math.floor(Math.random() * i);
+        const key = source < target ? `${source}-${target}` : `${target}-${source}`;
+        linkSet.add(key);
+        links.push({
+          source,
+          target,
+          weight: 0.6 + Math.random() * 1.4
+        });
+      }
+
+      // Add extra random links for richer structure.
+      const extra = Math.floor(nodeCount * 1.8);
+      for (let i = 0; i < extra; i += 1) {
+        const source = Math.floor(Math.random() * nodeCount);
+        let target = Math.floor(Math.random() * nodeCount);
+        if (source === target) {
+          target = (target + 1) % nodeCount;
+        }
+        const key = source < target ? `${source}-${target}` : `${target}-${source}`;
+        if (!linkSet.has(key)) {
+          linkSet.add(key);
+          links.push({
+            source,
+            target,
+            weight: 0.6 + Math.random() * 1.4
+          });
+        }
+      }
+
+      return { nodes, links };
+    }
+
+    function ForceGraphApp() {
+      const graph = useMemo(() => makeGraph(100), []);
+      const appRef = useRef(null);
+      const svgRef = useRef(null);
+      const selectedNodeRef = useRef(null);
+      const refreshHighlightRef = useRef(() => {});
+
+      const [tooltip, setTooltip] = useState(null);
+      const [selectedNode, setSelectedNode] = useState(null);
+
+      useEffect(() => {
+        const svg = d3.select(svgRef.current);
+        svg.selectAll("*").remove();
+
+        const width = svgRef.current.clientWidth;
+        const height = svgRef.current.clientHeight;
+
+        const container = svg.append("g").attr("class", "zoom-layer");
+        const linkLayer = container.append("g").attr("class", "links");
+        const nodeLayer = container.append("g").attr("class", "nodes");
+
+        const adjacency = new Map();
+        graph.nodes.forEach((n) => adjacency.set(n.id, new Set([n.id])));
+        graph.links.forEach((l) => {
+          const a = typeof l.source === "object" ? l.source.id : l.source;
+          const b = typeof l.target === "object" ? l.target.id : l.target;
+          adjacency.get(a).add(b);
+          adjacency.get(b).add(a);
+        });
+
+        const link = linkLayer
+          .selectAll("line")
+          .data(graph.links)
+          .enter()
+          .append("line")
+          .attr("stroke", "var(--link)")
+          .attr("stroke-width", (d) => Math.max(0.8, d.weight))
+          .attr("stroke-linecap", "round");
+
+        const node = nodeLayer
+          .selectAll("circle")
+          .data(graph.nodes)
+          .enter()
+          .append("circle")
+          .attr("r", (d) => d.value * 0.45)
+          .attr("fill", "var(--node)")
+          .attr("stroke", "rgba(255,255,255,0.2)")
+          .attr("stroke-width", 1)
+          .style("cursor", "pointer")
+          .on("mouseover", function (event, d) {
+            const rect = appRef.current.getBoundingClientRect();
+            setTooltip({
+              x: event.clientX - rect.left,
+              y: event.clientY - rect.top,
+              node: d
+            });
+          })
+          .on("mousemove", function (event, d) {
+            const rect = appRef.current.getBoundingClientRect();
+            setTooltip({
+              x: event.clientX - rect.left,
+              y: event.clientY - rect.top,
+              node: d
+            });
+          })
+          .on("mouseout", function () {
+            setTooltip(null);
+          })
+          .on("click", function (event, d) {
+            event.stopPropagation();
+            setSelectedNode((prev) => (prev === d.id ? null : d.id));
+          });
+
+        svg.on("click", () => {
+          setSelectedNode(null);
+        });
+
+        const zoom = d3
+          .zoom()
+          .scaleExtent([0.4, 4])
+          .on("zoom", (event) => {
+            container.attr("transform", event.transform);
+          });
+        svg.call(zoom);
+
+        const simulation = d3
+          .forceSimulation(graph.nodes)
+          .force(
+            "link",
+            d3
+              .forceLink(graph.links)
+              .id((d) => d.id)
+              .distance((d) => 22 + d.weight * 22)
+              .strength(0.5)
+          )
+          .force("charge", d3.forceManyBody().strength(-55))
+          .force("center", d3.forceCenter(width / 2, height / 2))
+          .force("collision", d3.forceCollide().radius((d) => d.value * 0.6 + 1));
+
+        node.call(
+          d3
+            .drag()
+            .on("start", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0.3).restart();
+              d.fx = d.x;
+              d.fy = d.y;
+            })
+            .on("drag", (event, d) => {
+              d.fx = event.x;
+              d.fy = event.y;
+            })
+            .on("end", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0);
+              d.fx = null;
+              d.fy = null;
+            })
+        );
+
+        function refreshHighlight() {
+          const active = selectedNodeRef.current;
+          if (active == null) {
+            node
+              .attr("fill", "var(--node)")
+              .attr("stroke", "rgba(255,255,255,0.2)")
+              .attr("opacity", 0.95);
+
+            link
+              .attr("stroke", "var(--link)")
+              .attr("stroke-opacity", 1)
+              .attr("stroke-width", (d) => Math.max(0.8, d.weight));
+            return;
+          }
+
+          node
+            .attr("fill", (d) => {
+              if (d.id === active) return "var(--active-2)";
+              return adjacency.get(active).has(d.id) ? "var(--active)" : "var(--node-dim)";
+            })
+            .attr("stroke", (d) => (d.id === active ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.12)"))
+            .attr("opacity", (d) => (adjacency.get(active).has(d.id) ? 1 : 0.35));
+
+          link
+            .attr("stroke", (d) => {
+              const s = d.source.id !== undefined ? d.source.id : d.source;
+              const t = d.target.id !== undefined ? d.target.id : d.target;
+              return s === active || t === active ? "var(--active)" : "var(--link-dim)";
+            })
+            .attr("stroke-opacity", (d) => {
+              const s = d.source.id !== undefined ? d.source.id : d.source;
+              const t = d.target.id !== undefined ? d.target.id : d.target;
+              return s === active || t === active ? 1 : 0.25;
+            })
+            .attr("stroke-width", (d) => {
+              const s = d.source.id !== undefined ? d.source.id : d.source;
+              const t = d.target.id !== undefined ? d.target.id : d.target;
+              return s === active || t === active ? Math.max(1.6, d.weight + 0.8) : Math.max(0.6, d.weight * 0.6);
+            });
+        }
+
+        refreshHighlightRef.current = refreshHighlight;
+
+        simulation.on("tick", () => {
+          link
+            .attr("x1", (d) => d.source.x)
+            .attr("y1", (d) => d.source.y)
+            .attr("x2", (d) => d.target.x)
+            .attr("y2", (d) => d.target.y);
+
+          node
+            .attr("cx", (d) => d.x)
+            .attr("cy", (d) => d.y);
+
+          refreshHighlight();
+        });
+
+        refreshHighlight();
+
+        const resizeObserver = new ResizeObserver(() => {
+          const w = svgRef.current.clientWidth;
+          const h = svgRef.current.clientHeight;
+          simulation.force("center", d3.forceCenter(w / 2, h / 2));
+          simulation.alpha(0.2).restart();
+        });
+        resizeObserver.observe(svgRef.current);
+
+        return () => {
+          simulation.stop();
+          resizeObserver.disconnect();
+          refreshHighlightRef.current = () => {};
+        };
+      }, [graph]);
+
+      useEffect(() => {
+        selectedNodeRef.current = selectedNode;
+        refreshHighlightRef.current();
+      }, [selectedNode]);
+
+      return React.createElement(
+        "div",
+        { className: "app", ref: appRef },
+        React.createElement(
+          "div",
+          { className: "header" },
+          React.createElement("p", { className: "title" }, "Force-directed Graph"),
+          React.createElement(
+            "p",
+            { className: "subtitle" },
+            selectedNode == null
+              ? "100 nodes · Hover for tooltip · Click to highlight neighbors"
+              : `Selected: Node ${selectedNode + 1} · Click empty area to clear`
+          )
+        ),
+        React.createElement(
+          "div",
+          { className: "stage" },
+          React.createElement("svg", { ref: svgRef, role: "img", "aria-label": "Interactive force-directed graph" })
+        ),
+        tooltip &&
+          React.createElement(
+            "div",
+            {
+              className: "tooltip",
+              style: { left: tooltip.x + "px", top: tooltip.y + "px" }
+            },
+            React.createElement("p", { className: "name" }, tooltip.node.label),
+            React.createElement("p", { className: "meta" }, `ID: ${tooltip.node.id}`),
+            React.createElement("p", { className: "meta" }, `Group: ${tooltip.node.group}`)
+          )
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(ForceGraphApp));
+  </script>
+</body>
+</html>

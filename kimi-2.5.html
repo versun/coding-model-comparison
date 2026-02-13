@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>力导向图 - Force-directed Graph</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0a0a0f;
+      color: #e4e4e7;
+      overflow: hidden;
+    }
+
+    #root {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    .header {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #fafafa;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: #71717a;
+    }
+
+    .controls {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      z-index: 10;
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #e4e4e7;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .graph-container {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    .graph-container:active {
+      cursor: grabbing;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(20, 20, 25, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #e4e4e7;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 100;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+    }
+
+    .tooltip.visible {
+      opacity: 1;
+    }
+
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 4px;
+    }
+
+    .tooltip-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .tooltip-label {
+      color: #71717a;
+    }
+
+    .tooltip-value {
+      color: #fafafa;
+      font-weight: 500;
+    }
+
+    .legend {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      z-index: 10;
+      background: rgba(20, 20, 25, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .legend-title {
+      font-size: 12px;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+    }
+
+    .legend-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .stats {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+      text-align: right;
+    }
+
+    .stats-item {
+      font-size: 12px;
+      color: #52525b;
+      margin-bottom: 4px;
+    }
+
+    .stats-value {
+      color: #a1a1aa;
+    }
+
+    /* SVG Styles */
+    svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .link {
+      stroke: rgba(255, 255, 255, 0.08);
+      stroke-width: 1;
+      transition: stroke 0.3s ease, stroke-width 0.3s ease;
+    }
+
+    .link.highlighted {
+      stroke: rgba(255, 255, 255, 0.3);
+      stroke-width: 1.5;
+    }
+
+    .link.dimmed {
+      stroke: rgba(255, 255, 255, 0.02);
+    }
+
+    .node {
+      cursor: pointer;
+      transition: filter 0.3s ease;
+    }
+
+    .node-circle {
+      transition: all 0.3s ease;
+    }
+
+    .node:hover .node-circle {
+      filter: brightness(1.3);
+    }
+
+    .node.dimmed {
+      opacity: 0.15;
+    }
+
+    .node.highlighted .node-circle {
+      stroke: #fff;
+      stroke-width: 2;
+      filter: brightness(1.5);
+    }
+
+    .node-label {
+      font-size: 10px;
+      fill: #71717a;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .node:hover .node-label,
+    .node.highlighted .node-label {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // 生成随机数据
+    const generateData = () => {
+      const nodes = [];
+      const links = [];
+      const nodeCount = 100;
+      const groups = 5;
+      const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b'];
+
+      // 生成节点
+      for (let i = 0; i < nodeCount; i++) {
+        const group = Math.floor(Math.random() * groups);
+        nodes.push({
+          id: i,
+          name: `Node ${i + 1}`,
+          group,
+          value: Math.floor(Math.random() * 100) + 10,
+          color: colors[group],
+        });
+      }
+
+      // 生成连接
+      for (let i = 0; i < nodeCount; i++) {
+        // 每个节点至少连接 1-3 个其他节点
+        const connectionCount = Math.floor(Math.random() * 3) + 1;
+        for (let j = 0; j < connectionCount; j++) {
+          const target = Math.floor(Math.random() * nodeCount);
+          if (target !== i) {
+            // 避免重复连接
+            const exists = links.some(
+              l => (l.source === i && l.target === target) ||
+                   (l.source === target && l.target === i)
+            );
+            if (!exists) {
+              links.push({
+                source: i,
+                target,
+                value: Math.random(),
+              });
+            }
+          }
+        }
+      }
+
+      return { nodes, links, colors };
+    };
+
+    // Tooltip 组件
+    const Tooltip = ({ data, x, y, visible }) => {
+      if (!data) return null;
+
+      return (
+        <div
+          className={`tooltip ${visible ? 'visible' : ''}`}
+          style={{ left: x + 12, top: y - 12 }}
+        >
+          <div className="tooltip-row">
+            <span className="tooltip-label">名称</span>
+            <span className="tooltip-value">{data.name}</span>
+          </div>
+          <div className="tooltip-row">
+            <span className="tooltip-label">群组</span>
+            <span className="tooltip-value">Group {data.group + 1}</span>
+          </div>
+          <div className="tooltip-row">
+            <span className="tooltip-label">数值</span>
+            <span className="tooltip-value">{data.value}</span>
+          </div>
+          <div className="tooltip-row">
+            <span className="tooltip-label">连接数</span>
+            <span className="tooltip-value">{data.connectionCount || 0}</span>
+          </div>
+        </div>
+      );
+    };
+
+    // 主应用组件
+    const App = () => {
+      const svgRef = useRef(null);
+      const containerRef = useRef(null);
+      const simulationRef = useRef(null);
+      const zoomRef = useRef(null);
+
+      const [data, setData] = useState(() => generateData());
+      const [hoveredNode, setHoveredNode] = useState(null);
+      const [selectedNode, setSelectedNode] = useState(null);
+      const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+      const [tooltipVisible, setTooltipVisible] = useState(false);
+
+      // 计算每个节点的连接数
+      const nodeConnections = useMemo(() => {
+        const connections = {};
+        data.nodes.forEach(node => {
+          connections[node.id] = 0;
+        });
+        data.links.forEach(link => {
+          connections[link.source] = (connections[link.source] || 0) + 1;
+          connections[link.target] = (connections[link.target] || 0) + 1;
+        });
+        return connections;
+      }, [data]);
+
+      // 添加连接数到节点数据
+      const enrichedNodes = useMemo(() => {
+        return data.nodes.map(node => ({
+          ...node,
+          connectionCount: nodeConnections[node.id] || 0,
+        }));
+      }, [data.nodes, nodeConnections]);
+
+      // 获取相邻节点
+      const getNeighbors = useCallback((nodeId) => {
+        const neighbors = new Set();
+        data.links.forEach(link => {
+          if (link.source === nodeId) neighbors.add(link.target);
+          if (link.target === nodeId) neighbors.add(link.source);
+        });
+        return neighbors;
+      }, [data.links]);
+
+      // 初始化力导向图
+      useEffect(() => {
+        if (!svgRef.current || !containerRef.current) return;
+
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+
+        const svg = d3.select(svgRef.current);
+        svg.selectAll('*').remove();
+
+        // 创建缩放行为
+        const zoom = d3.zoom()
+          .scaleExtent([0.1, 4])
+          .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+          });
+
+        zoomRef.current = zoom;
+        svg.call(zoom);
+
+        // 创建主容器
+        const g = svg.append('g');
+
+        // 创建连接
+        const link = g.append('g')
+          .attr('class', 'links')
+          .selectAll('line')
+          .data(data.links)
+          .enter()
+          .append('line')
+          .attr('class', 'link');
+
+        // 创建节点组
+        const node = g.append('g')
+          .attr('class', 'nodes')
+          .selectAll('g')
+          .data(enrichedNodes)
+          .enter()
+          .append('g')
+          .attr('class', 'node')
+          .call(d3.drag()
+            .on('start', (event, d) => {
+              if (!event.active) simulation.alphaTarget(0.3).restart();
+              d.fx = d.x;
+              d.fy = d.y;
+            })
+            .on('drag', (event, d) => {
+              d.fx = event.x;
+              d.fy = event.y;
+            })
+            .on('end', (event, d) => {
+              if (!event.active) simulation.alphaTarget(0);
+              d.fx = null;
+              d.fy = null;
+            })
+          );
+
+        // 添加节点圆圈
+        node.append('circle')
+          .attr('class', 'node-circle')
+          .attr('r', d => Math.sqrt(d.value) * 2 + 4)
+          .attr('fill', d => d.color)
+          .attr('fill-opacity', 0.85)
+          .attr('stroke', d => d.color)
+          .attr('stroke-opacity', 0.4)
+          .attr('stroke-width', 8);
+
+        // 添加节点标签
+        node.append('text')
+          .attr('class', 'node-label')
+          .attr('dy', d => Math.sqrt(d.value) * 2 + 18)
+          .attr('text-anchor', 'middle')
+          .text(d => d.name);
+
+        // 节点交互事件
+        node.on('mouseenter', (event, d) => {
+          setHoveredNode(d);
+          setTooltipPos({ x: event.clientX, y: event.clientY });
+          setTooltipVisible(true);
+        })
+        .on('mousemove', (event) => {
+          setTooltipPos({ x: event.clientX, y: event.clientY });
+        })
+        .on('mouseleave', () => {
+          setHoveredNode(null);
+          setTooltipVisible(false);
+        })
+        .on('click', (event, d) => {
+          event.stopPropagation();
+          const neighbors = getNeighbors(d.id);
+
+          if (selectedNode?.id === d.id) {
+            // 取消选中
+            setSelectedNode(null);
+            node.classed('highlighted', false).classed('dimmed', false);
+            link.classed('highlighted', false).classed('dimmed', false);
+          } else {
+            // 选中节点
+            setSelectedNode(d);
+            node.classed('highlighted', n => n.id === d.id || neighbors.has(n.id))
+                .classed('dimmed', n => n.id !== d.id && !neighbors.has(n.id));
+            link.classed('highlighted', l => l.source === d.id || l.target === d.id)
+                .classed('dimmed', l => l.source !== d.id && l.target !== d.id);
+          }
+        });
+
+        // 点击空白处取消选中
+        svg.on('click', () => {
+          setSelectedNode(null);
+          node.classed('highlighted', false).classed('dimmed', false);
+          link.classed('highlighted', false).classed('dimmed', false);
+        });
+
+        // 创建力导向模拟
+        const simulation = d3.forceSimulation(enrichedNodes)
+          .force('link', d3.forceLink(data.links).id(d => d.id).distance(60))
+          .force('charge', d3.forceManyBody().strength(-200))
+          .force('center', d3.forceCenter(width / 2, height / 2))
+          .force('collision', d3.forceCollide().radius(d => Math.sqrt(d.value) * 2 + 10));
+
+        simulationRef.current = simulation;
+
+        // 更新位置
+        simulation.on('tick', () => {
+          link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+          node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+
+        // 清理函数
+        return () => {
+          simulation.stop();
+        };
+      }, [data, enrichedNodes, getNeighbors, selectedNode]);
+
+      // 重新生成数据
+      const handleRegenerate = () => {
+        setSelectedNode(null);
+        setHoveredNode(null);
+        setTooltipVisible(false);
+        setData(generateData());
+      };
+
+      // 重置视图
+      const handleResetView = () => {
+        if (svgRef.current && zoomRef.current) {
+          const svg = d3.select(svgRef.current);
+          svg.transition().duration(750).call(zoomRef.current.transform, d3.zoomIdentity);
+        }
+      };
+
+      // 窗口大小改变时重新居中
+      useEffect(() => {
+        const handleResize = () => {
+          if (simulationRef.current && containerRef.current) {
+            const width = containerRef.current.clientWidth;
+            const height = containerRef.current.clientHeight;
+            simulationRef.current.force('center', d3.forceCenter(width / 2, height / 2));
+            simulationRef.current.alpha(0.3).restart();
+          }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+      }, []);
+
+      return (
+        <div className="container">
+          <div className="header">
+            <h1>Force-directed Graph</h1>
+            <p>交互式力导向图可视化</p>
+          </div>
+
+          <div className="controls">
+            <button className="btn" onClick={handleRegenerate}>
+              重新生成
+            </button>
+            <button className="btn" onClick={handleResetView}>
+              重置视图
+            </button>
+          </div>
+
+          <div ref={containerRef} className="graph-container">
+            <svg ref={svgRef} />
+          </div>
+
+          <Tooltip
+            data={hoveredNode}
+            x={tooltipPos.x}
+            y={tooltipPos.y}
+            visible={tooltipVisible}
+          />
+
+          <div className="legend">
+            <div className="legend-title">群组</div>
+            {data.colors.map((color, i) => (
+              <div key={i} className="legend-item">
+                <div className="legend-dot" style={{ background: color }} />
+                <span>Group {i + 1}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="stats">
+            <div className="stats-item">
+              节点: <span className="stats-value">{data.nodes.length}</span>
+            </div>
+            <div className="stats-item">
+              连接: <span className="stats-value">{data.links.length}</span>
+            </div>
+            <div className="stats-item">
+              选中: <span className="stats-value">{selectedNode ? selectedNode.name : '无'}</span>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
