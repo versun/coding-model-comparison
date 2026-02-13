@@ -280,259 +280,146 @@ UI 风格要求现代、极简、暗色模式。</pre
                 </details>
             </section>
 
-            <section class="summary" id="summary"></section>
+            <section class="summary">
+                <article class="card">
+                    <div class="label">参与模型数</div>
+                    <div class="value">5</div>
+                </article>
+                <article class="card">
+                    <div class="label">最高完成度模型</div>
+                    <div class="value">GLM 5</div>
+                </article>
+                <article class="card">
+                    <div class="label">最快完成模型</div>
+                    <div class="value">Opus 4.6</div>
+                    <div class="meta">完成时间：53秒</div>
+                </article>
+            </section>
 
             <section class="panel">
                 <h2>测试明细</h2>
                 <div class="table-wrap">
                     <table>
-                        <thead id="tableHead"></thead>
-                        <tbody id="tableBody"></tbody>
+                        <thead>
+                            <tr>
+                                <th>模型</th>
+                                <th>运行环境</th>
+                                <th>完成时间</th>
+                                <th>100 个随机数据点</th>
+                                <th>悬停节点显示信息</th>
+                                <th>点击高亮相邻节点</th>
+                                <th>滚轮缩放画布</th>
+                                <th>完善的页面信息</th>
+                                <th>完成度</th>
+                                <th>成果</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="model">GLM 5</td>
+                                <td>Claude Code</td>
+                                <td>2分 14秒</td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td>5</td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="glm-5.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看</a
+                                    >
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="model">Opus 4.6</td>
+                                <td>Claude Code</td>
+                                <td>53秒</td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark no">未通过</span></td>
+                                <td>4</td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="opus-4.6.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看</a
+                                    >
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="model">GPT 5.3 Codex</td>
+                                <td>Codex CLI</td>
+                                <td>1分 40秒</td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark no">未通过</span></td>
+                                <td>4</td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="gpt-5.3-codex.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看</a
+                                    >
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="model">Kimi 2.5</td>
+                                <td>Claude Code</td>
+                                <td>1分 53秒</td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark no">未通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td>4</td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="kimi-2.5.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看</a
+                                    >
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="model">Minimax 2.5</td>
+                                <td>Claude Code</td>
+                                <td>2分 38秒</td>
+                                <td><span class="mark no">未通过</span></td>
+                                <td><span class="mark no">未通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark yes">通过</span></td>
+                                <td><span class="mark no">未通过</span></td>
+                                <td>2</td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="minimax-2.5.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看</a
+                                    >
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
                 <p class="hint">点击“成果”可进入每个模型的独立页面。</p>
             </section>
         </main>
-
-        <script>
-            const modelLinks = {
-                "GLM 5": "glm-5.html",
-                "Opus 4.6": "opus-4.6.html",
-                "GPT 5.3 Codex": "gpt-5.3-codex.html",
-                "Kimi 2.5": "kimi-2.5.html",
-                "Minimax 2.5": "minimax-2.5.html",
-            };
-
-            const embeddedCsv = `表格 1
-,运行环境,完成时间,100 个随机数据点,悬停节点显示信息,点击高亮相邻节点,滚轮缩放画布,  完善的页面信息,完成度,
-GLM 5,Claude Code,2分 14秒,✅,✅,✅,✅,✅,5,
-Opus 4.6,Claude Code,53秒,✅,✅,✅,✅,❌,4,
-GPT 5.3 Codex,Codex CLI,1分 40秒,✅,✅,✅,✅,❌,4,
-Kimi 2.5,Claude Code,1分 53秒,✅,✅,❌,✅,✅,4,
-Minimax 2.5,Claude Code,2分 38秒,❌,❌,✅,✅,❌,2,`;
-
-            function splitCsvLine(line) {
-                const cells = [];
-                let cell = "";
-                let inQuotes = false;
-
-                for (let i = 0; i < line.length; i += 1) {
-                    const char = line[i];
-                    if (char === '"') {
-                        inQuotes = !inQuotes;
-                    } else if (char === "," && !inQuotes) {
-                        cells.push(cell.trim());
-                        cell = "";
-                    } else {
-                        cell += char;
-                    }
-                }
-                cells.push(cell.trim());
-                return cells.map((value) =>
-                    value.replace(/\u00a0/g, " ").trim(),
-                );
-            }
-
-            function trimTrailingEmptyCells(row) {
-                const out = row.slice();
-                while (out.length > 0 && out[out.length - 1] === "") {
-                    out.pop();
-                }
-                return out;
-            }
-
-            function parseCsv(csvText) {
-                const rawRows = csvText
-                    .split(/\r?\n/)
-                    .map((line) => line.trim())
-                    .filter((line) => line.length > 0)
-                    .map(splitCsvLine)
-                    .map(trimTrailingEmptyCells)
-                    .filter((row) => row.some((cell) => cell !== ""));
-
-                const headerIndex = rawRows.findIndex((row) =>
-                    row.includes("完成度"),
-                );
-                const safeHeaderIndex = headerIndex === -1 ? 0 : headerIndex;
-                const header = rawRows[safeHeaderIndex];
-                const dataRows = rawRows
-                    .slice(safeHeaderIndex + 1)
-                    .filter((row) => row[0] && row[0] !== "表格 1");
-
-                if (!header || dataRows.length === 0) {
-                    throw new Error("CSV 内容为空，或无法识别为测试结果表。");
-                }
-
-                if (!header[0]) {
-                    header[0] = "模型";
-                }
-
-                return { header, dataRows };
-            }
-
-            function completionScore(value) {
-                const score = Number.parseFloat(value);
-                return Number.isFinite(score) ? score : 0;
-            }
-
-            function parseDurationSeconds(value) {
-                if (!value) {
-                    return Number.NaN;
-                }
-
-                const text = String(value).replace(/\s+/g, "");
-                const minuteMatch = text.match(/(\d+(?:\.\d+)?)分/);
-                const secondMatch = text.match(/(\d+(?:\.\d+)?)秒/);
-                if (minuteMatch || secondMatch) {
-                    const minutes = minuteMatch
-                        ? Number.parseFloat(minuteMatch[1])
-                        : 0;
-                    const seconds = secondMatch
-                        ? Number.parseFloat(secondMatch[1])
-                        : 0;
-                    return minutes * 60 + seconds;
-                }
-
-                const colonMatch = text.match(/^(\d+):(\d{1,2})$/);
-                if (colonMatch) {
-                    return (
-                        Number.parseInt(colonMatch[1], 10) * 60 +
-                        Number.parseInt(colonMatch[2], 10)
-                    );
-                }
-
-                const pureNumber = Number.parseFloat(text);
-                return Number.isFinite(pureNumber) ? pureNumber : Number.NaN;
-            }
-
-            function renderSummary(header, dataRows) {
-                const summary = document.getElementById("summary");
-                const scoreIndex = header.findIndex((cell) =>
-                    cell.includes("完成度"),
-                );
-                const durationIndex = header.findIndex((cell) =>
-                    cell.includes("完成时间"),
-                );
-                const modelCount = dataRows.length;
-                const bestRow = dataRows
-                    .slice()
-                    .sort(
-                        (a, b) =>
-                            completionScore(b[scoreIndex]) -
-                            completionScore(a[scoreIndex]),
-                    )[0];
-                const bestModel = bestRow ? bestRow[0] : "-";
-
-                let fastestModel = "-";
-                let fastestRawTime = "-";
-                if (durationIndex >= 0) {
-                    const durationRows = dataRows
-                        .map((row) => ({
-                            model: row[0] || "-",
-                            rawTime: row[durationIndex] || "",
-                            seconds: parseDurationSeconds(row[durationIndex]),
-                        }))
-                        .filter((item) => Number.isFinite(item.seconds))
-                        .sort((a, b) => a.seconds - b.seconds);
-
-                    if (durationRows.length > 0) {
-                        fastestModel = durationRows[0].model;
-                        fastestRawTime = durationRows[0].rawTime || "-";
-                    }
-                }
-
-                summary.innerHTML = `
-        <article class="card">
-          <div class="label">参与模型数</div>
-          <div class="value">${modelCount}</div>
-        </article>
-        <article class="card">
-          <div class="label">最高完成度模型</div>
-          <div class="value">${bestModel}</div>
-        </article>
-        ${
-            durationIndex >= 0
-                ? `
-          <article class="card">
-            <div class="label">最快完成模型</div>
-            <div class="value">${fastestModel}</div>
-            <div class="meta">完成时间：${fastestRawTime}</div>
-          </article>
-        `
-                : ""
-        }
-      `;
-            }
-
-            function badge(value) {
-                if (value === "✅") {
-                    return '<span class="mark yes">通过</span>';
-                }
-                if (value === "❌") {
-                    return '<span class="mark no">未通过</span>';
-                }
-                return value || "-";
-            }
-
-            function renderTable(header, dataRows) {
-                const tableHead = document.getElementById("tableHead");
-                const tableBody = document.getElementById("tableBody");
-
-                tableHead.innerHTML = `
-        <tr>
-          ${header.map((cell) => `<th>${cell || "-"}</th>`).join("")}
-          <th>成果</th>
-        </tr>
-      `;
-
-                tableBody.innerHTML = dataRows
-                    .map((row) => {
-                        const model = row[0];
-                        const link = modelLinks[model];
-                        const cells = header
-                            .map((_, index) => {
-                                const raw = row[index] || "";
-                                if (index === 0) {
-                                    return `<td class="model">${raw || "-"}</td>`;
-                                }
-                                return `<td>${badge(raw)}</td>`;
-                            })
-                            .join("");
-                        const detailCell = link
-                            ? `<td><a class="link" href="${link}" target="_blank" rel="noopener noreferrer">查看</a></td>`
-                            : "<td>-</td>";
-                        return `<tr>${cells}${detailCell}</tr>`;
-                    })
-                    .join("");
-            }
-
-            async function loadAndRender() {
-                let csvText = embeddedCsv;
-
-                try {
-                    const response = await fetch("results.csv", {
-                        cache: "no-store",
-                    });
-                    if (!response.ok) {
-                        throw new Error("fetch failed");
-                    }
-                    csvText = await response.text();
-                } catch (error) {
-                    // Keep default data source text and fallback to embedded CSV.
-                }
-
-                try {
-                    const { header, dataRows } = parseCsv(csvText);
-                    renderSummary(header, dataRows);
-                    renderTable(header, dataRows);
-                } catch (error) {
-                    document.getElementById("tableHead").innerHTML = "";
-                    document.getElementById("tableBody").innerHTML =
-                        `<tr><td>解析 CSV 失败：${error.message}</td></tr>`;
-                }
-            }
-
-            loadAndRender();
-        </script>
     </body>
 </html>
