@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Random Signal Topology</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #06070a;
+        --bg-elevated: rgba(14, 17, 24, 0.78);
+        --panel-border: rgba(255, 255, 255, 0.08);
+        --text-main: #f3f5f7;
+        --text-muted: rgba(243, 245, 247, 0.64);
+        --text-faint: rgba(243, 245, 247, 0.4);
+        --accent: #6fffe9;
+        --accent-warm: #ffc857;
+        --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+        --grid: rgba(255, 255, 255, 0.05);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top, rgba(111, 255, 233, 0.12), transparent 24rem),
+          radial-gradient(circle at 85% 18%, rgba(255, 200, 87, 0.12), transparent 18rem),
+          linear-gradient(180deg, #0a0d13 0%, #050608 100%);
+        color: var(--text-main);
+        font-family: "Space Grotesk", sans-serif;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 72px 72px;
+        mask-image: radial-gradient(circle at center, black 35%, transparent 80%);
+        opacity: 0.32;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      .app-shell {
+        position: relative;
+        z-index: 1;
+        width: min(1280px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 32px 0 40px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 22px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        padding: 8px 14px;
+        border: 1px solid var(--panel-border);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), #86a8ff);
+        box-shadow: 0 0 16px rgba(111, 255, 233, 0.65);
+      }
+
+      .hero h1 {
+        margin: 0;
+        max-width: 10ch;
+        font-size: clamp(2.8rem, 7vw, 5.8rem);
+        line-height: 0.92;
+        letter-spacing: -0.05em;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 58rem;
+        color: var(--text-muted);
+        font-size: clamp(1rem, 2.4vw, 1.12rem);
+        line-height: 1.7;
+      }
+
+      .dashboard {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.74fr);
+        gap: 18px;
+      }
+
+      .panel {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--panel-border);
+        border-radius: 26px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02)),
+          var(--bg-elevated);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .graph-panel {
+        padding: 18px;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .panel-header h2,
+      .side-panel h2 {
+        margin: 0 0 6px;
+        font-size: 1.15rem;
+        letter-spacing: -0.03em;
+      }
+
+      .panel-header p,
+      .side-panel p,
+      .hint-list li,
+      .neighbor-list li {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.6;
+      }
+
+      .action-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .ghost-button {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        padding: 11px 16px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text-main);
+        cursor: pointer;
+        transition:
+          border-color 160ms ease,
+          transform 160ms ease,
+          background 160ms ease;
+      }
+
+      .ghost-button:hover {
+        border-color: rgba(111, 255, 233, 0.36);
+        background: rgba(111, 255, 233, 0.08);
+        transform: translateY(-1px);
+      }
+
+      .graph-frame {
+        position: relative;
+        min-height: 640px;
+        border-radius: 22px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background:
+          radial-gradient(circle at 50% 20%, rgba(111, 255, 233, 0.07), transparent 24rem),
+          linear-gradient(180deg, rgba(6, 7, 10, 0.98), rgba(7, 9, 13, 0.92));
+      }
+
+      .graph-frame::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(transparent 96%, rgba(255, 255, 255, 0.03) 100%),
+          linear-gradient(90deg, transparent 96%, rgba(255, 255, 255, 0.03) 100%);
+        background-size: 48px 48px;
+        opacity: 0.16;
+      }
+
+      .graph-svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+      }
+
+      .graph-svg:active {
+        cursor: grabbing;
+      }
+
+      .tooltip {
+        position: absolute;
+        min-width: 180px;
+        pointer-events: none;
+        border: 1px solid rgba(111, 255, 233, 0.18);
+        border-radius: 16px;
+        padding: 12px 14px;
+        background: rgba(6, 7, 10, 0.94);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+        transform: translate(14px, -112%);
+      }
+
+      .tooltip strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.98rem;
+      }
+
+      .tooltip span {
+        display: block;
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        line-height: 1.55;
+      }
+
+      .side-panel {
+        display: grid;
+        gap: 14px;
+        padding: 18px;
+        align-content: start;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .stat-card,
+      .info-card {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .stat-card span,
+      .info-card .label {
+        display: block;
+        color: var(--text-faint);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .stat-card strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 1.46rem;
+        letter-spacing: -0.04em;
+      }
+
+      .info-card h3 {
+        margin: 10px 0 8px;
+        font-size: 1rem;
+        letter-spacing: -0.03em;
+      }
+
+      .hint-list,
+      .neighbor-list {
+        display: grid;
+        gap: 10px;
+        padding-left: 18px;
+      }
+
+      .neighbor-list {
+        margin: 12px 0 0;
+        max-height: 200px;
+        overflow: auto;
+      }
+
+      .selected-node {
+        border-color: rgba(111, 255, 233, 0.24);
+        background:
+          linear-gradient(180deg, rgba(111, 255, 233, 0.08), rgba(255, 255, 255, 0.03)),
+          rgba(255, 255, 255, 0.03);
+      }
+
+      .node-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        box-shadow: 0 0 14px currentColor;
+      }
+
+      .empty-note {
+        color: var(--text-faint);
+      }
+
+      .footer-note {
+        font-family: "IBM Plex Mono", monospace;
+        color: var(--text-faint);
+        font-size: 0.8rem;
+      }
+
+      @media (max-width: 980px) {
+        .dashboard {
+          grid-template-columns: 1fr;
+        }
+
+        .graph-frame {
+          min-height: 520px;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .app-shell {
+          width: min(100vw - 20px, 100%);
+          padding-top: 20px;
+          padding-bottom: 24px;
+        }
+
+        .panel-header {
+          flex-direction: column;
+        }
+
+        .graph-panel,
+        .side-panel {
+          padding: 14px;
+        }
+
+        .graph-frame {
+          min-height: 420px;
+        }
+
+        .stat-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="module">
+      import React, {
+        startTransition,
+        useEffect,
+        useLayoutEffect,
+        useMemo,
+        useRef,
+        useState,
+      } from "https://esm.sh/react@18.3.1";
+      import { createRoot } from "https://esm.sh/react-dom@18.3.1/client";
+      import * as d3 from "https://esm.sh/d3@7.9.0";
+
+      const NODE_COUNT = 100;
+      const GROUP_COLORS = ["#6fffe9", "#56cfe1", "#f4d35e", "#ff8c69", "#b8f2a6", "#ff5d8f"];
+
+      function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function addLink(links, seen, source, target) {
+        if (source === target) {
+          return;
+        }
+
+        const key = [source, target].sort().join("::");
+        if (seen.has(key)) {
+          return;
+        }
+
+        seen.add(key);
+        links.push({
+          source,
+          target,
+          strength: Math.random() * 0.8 + 0.5,
+        });
+      }
+
+      function generateGraphData(count = NODE_COUNT) {
+        const nodes = Array.from({ length: count }, (_, index) => ({
+          id: `node-${index + 1}`,
+          label: `Point ${String(index + 1).padStart(3, "0")}`,
+          value: randomInt(14, 96),
+          group: randomInt(0, GROUP_COLORS.length - 1),
+        }));
+
+        const links = [];
+        const seen = new Set();
+
+        for (let index = 1; index < count; index += 1) {
+          const previousIndex = randomInt(Math.max(0, index - 8), index - 1);
+          addLink(links, seen, nodes[index].id, nodes[previousIndex].id);
+        }
+
+        const extraLinks = Math.round(count * 1.55);
+        for (let index = 0; index < extraLinks; index += 1) {
+          const sourceIndex = randomInt(0, count - 1);
+          const targetIndex = randomInt(0, count - 1);
+          addLink(links, seen, nodes[sourceIndex].id, nodes[targetIndex].id);
+        }
+
+        return { nodes, links };
+      }
+
+      function useElementSize(ref) {
+        const [size, setSize] = useState({ width: 0, height: 0 });
+
+        useLayoutEffect(() => {
+          if (!ref.current) {
+            return undefined;
+          }
+
+          const updateSize = (rect) => {
+            setSize({
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+            });
+          };
+
+          const observer = new ResizeObserver((entries) => {
+            if (entries[0]) {
+              updateSize(entries[0].contentRect);
+            }
+          });
+
+          observer.observe(ref.current);
+          updateSize(ref.current.getBoundingClientRect());
+
+          return () => observer.disconnect();
+        }, [ref]);
+
+        return size;
+      }
+
+      function ForceGraph({ graph, adjacency, selectedId, setSelectedId }) {
+        const frameRef = useRef(null);
+        const svgRef = useRef(null);
+        const graphRef = useRef(null);
+        const [tooltip, setTooltip] = useState(null);
+        const size = useElementSize(frameRef);
+
+        useEffect(() => {
+          setTooltip(null);
+        }, [graph]);
+
+        useEffect(() => {
+          if (!size.width || !size.height || !svgRef.current) {
+            return undefined;
+          }
+
+          const svg = d3.select(svgRef.current);
+          svg.selectAll("*").remove();
+          svg.attr("viewBox", `0 0 ${size.width} ${size.height}`);
+
+          const defs = svg.append("defs");
+          const glow = defs.append("filter").attr("id", "node-glow").attr("height", "300%").attr("width", "300%");
+          glow.append("feGaussianBlur").attr("stdDeviation", "4").attr("result", "blur");
+          const merge = glow.append("feMerge");
+          merge.append("feMergeNode").attr("in", "blur");
+          merge.append("feMergeNode").attr("in", "SourceGraphic");
+
+          const zoomLayer = svg.append("g").attr("class", "zoom-layer");
+          const linkLayer = zoomLayer.append("g").attr("class", "links");
+          const nodeLayer = zoomLayer.append("g").attr("class", "nodes");
+
+          const nodes = graph.nodes.map((node) => ({
+            ...node,
+            radius: 4.6 + node.value * 0.065,
+          }));
+          const links = graph.links.map((link) => ({ ...link }));
+
+          const colorScale = d3.scaleOrdinal(GROUP_COLORS);
+
+          const updateTooltip = (event, datum) => {
+            if (!frameRef.current) {
+              return;
+            }
+
+            const bounds = frameRef.current.getBoundingClientRect();
+            const x = Math.min(Math.max(event.clientX - bounds.left, 18), bounds.width - 200);
+            const y = Math.min(Math.max(event.clientY - bounds.top, 18), bounds.height - 24);
+
+            setTooltip({
+              x,
+              y,
+              datum,
+              degree: Math.max(0, (adjacency.get(datum.id)?.size ?? 1) - 1),
+            });
+          };
+
+          const drag = d3
+            .drag()
+            .on("start", (event, datum) => {
+              if (!event.active) {
+                simulation.alphaTarget(0.16).restart();
+              }
+              datum.fx = datum.x;
+              datum.fy = datum.y;
+            })
+            .on("drag", (event, datum) => {
+              datum.fx = event.x;
+              datum.fy = event.y;
+            })
+            .on("end", (event, datum) => {
+              if (!event.active) {
+                simulation.alphaTarget(0);
+              }
+              datum.fx = null;
+              datum.fy = null;
+            });
+
+          const link = linkLayer
+            .selectAll("line")
+            .data(links)
+            .join("line")
+            .attr("stroke", "rgba(255, 255, 255, 0.28)")
+            .attr("stroke-linecap", "round")
+            .attr("stroke-opacity", 0.3)
+            .attr("stroke-width", (datum) => 0.7 + datum.strength * 0.55);
+
+          const node = nodeLayer
+            .selectAll("circle")
+            .data(nodes, (datum) => datum.id)
+            .join("circle")
+            .attr("r", (datum) => datum.radius)
+            .attr("fill", (datum) => colorScale(datum.group))
+            .attr("fill-opacity", 0.94)
+            .attr("stroke", "rgba(255, 255, 255, 0.2)")
+            .attr("stroke-width", 1.1)
+            .style("cursor", "pointer")
+            .on("mouseenter", (event, datum) => updateTooltip(event, datum))
+            .on("mousemove", (event, datum) => updateTooltip(event, datum))
+            .on("mouseleave", () => setTooltip(null))
+            .on("click", (event, datum) => {
+              event.stopPropagation();
+              setSelectedId((current) => (current === datum.id ? null : datum.id));
+            })
+            .call(drag);
+
+          const simulation = d3
+            .forceSimulation(nodes)
+            .force(
+              "link",
+              d3
+                .forceLink(links)
+                .id((datum) => datum.id)
+                .distance((datum) => 32 + datum.strength * 34)
+                .strength((datum) => 0.18 + datum.strength * 0.08)
+            )
+            .force("charge", d3.forceManyBody().strength(-48))
+            .force("collision", d3.forceCollide().radius((datum) => datum.radius + 2.5))
+            .force("center", d3.forceCenter(size.width / 2, size.height / 2))
+            .force("x", d3.forceX(size.width / 2).strength(0.025))
+            .force("y", d3.forceY(size.height / 2).strength(0.025))
+            .on("tick", () => {
+              link
+                .attr("x1", (datum) => datum.source.x)
+                .attr("y1", (datum) => datum.source.y)
+                .attr("x2", (datum) => datum.target.x)
+                .attr("y2", (datum) => datum.target.y);
+
+              node.attr("cx", (datum) => datum.x).attr("cy", (datum) => datum.y);
+            });
+
+          const zoom = d3
+            .zoom()
+            .scaleExtent([0.45, 2.8])
+            .on("zoom", (event) => {
+              zoomLayer.attr("transform", event.transform);
+            });
+
+          svg.call(zoom).on("dblclick.zoom", null);
+          svg.on("click", () => setSelectedId(null));
+
+          svg.call(
+            zoom.transform,
+            d3.zoomIdentity
+              .translate(size.width / 2, size.height / 2)
+              .scale(0.9)
+              .translate(-size.width / 2, -size.height / 2)
+          );
+
+          graphRef.current = { node, link, colorScale };
+
+          return () => {
+            simulation.stop();
+            svg.on(".zoom", null);
+            svg.on("click", null);
+          };
+        }, [graph, adjacency, size.height, size.width, setSelectedId]);
+
+        useEffect(() => {
+          if (!graphRef.current) {
+            return;
+          }
+
+          const { node, link, colorScale } = graphRef.current;
+
+          if (!selectedId) {
+            node
+              .attr("opacity", 1)
+              .attr("stroke", "rgba(255, 255, 255, 0.2)")
+              .attr("stroke-width", 1.1)
+              .attr("filter", null)
+              .attr("fill", (datum) => colorScale(datum.group));
+
+            link
+              .attr("stroke", "rgba(255, 255, 255, 0.28)")
+              .attr("stroke-opacity", 0.3)
+              .attr("stroke-width", (datum) => 0.7 + datum.strength * 0.55);
+
+            return;
+          }
+
+          const neighbors = adjacency.get(selectedId) ?? new Set([selectedId]);
+
+          node
+            .attr("opacity", (datum) => (neighbors.has(datum.id) ? 1 : 0.14))
+            .attr("stroke", (datum) => {
+              if (datum.id === selectedId) {
+                return "#ffffff";
+              }
+              return neighbors.has(datum.id) ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.12)";
+            })
+            .attr("stroke-width", (datum) => {
+              if (datum.id === selectedId) {
+                return 2.6;
+              }
+              return neighbors.has(datum.id) ? 1.6 : 1;
+            })
+            .attr("filter", (datum) => (datum.id === selectedId ? "url(#node-glow)" : null))
+            .attr("fill", (datum) => {
+              if (datum.id === selectedId) {
+                return "#ffffff";
+              }
+              return colorScale(datum.group);
+            });
+
+          link
+            .attr("stroke", (datum) => {
+              const sourceId = typeof datum.source === "object" ? datum.source.id : datum.source;
+              const targetId = typeof datum.target === "object" ? datum.target.id : datum.target;
+              if (sourceId === selectedId || targetId === selectedId) {
+                return "rgba(111, 255, 233, 0.92)";
+              }
+              return neighbors.has(sourceId) && neighbors.has(targetId)
+                ? "rgba(255, 255, 255, 0.26)"
+                : "rgba(255, 255, 255, 0.08)";
+            })
+            .attr("stroke-opacity", (datum) => {
+              const sourceId = typeof datum.source === "object" ? datum.source.id : datum.source;
+              const targetId = typeof datum.target === "object" ? datum.target.id : datum.target;
+              if (sourceId === selectedId || targetId === selectedId) {
+                return 1;
+              }
+              return neighbors.has(sourceId) && neighbors.has(targetId) ? 0.32 : 0.08;
+            })
+            .attr("stroke-width", (datum) => {
+              const sourceId = typeof datum.source === "object" ? datum.source.id : datum.source;
+              const targetId = typeof datum.target === "object" ? datum.target.id : datum.target;
+              if (sourceId === selectedId || targetId === selectedId) {
+                return 1.8 + datum.strength * 0.8;
+              }
+              return 0.55 + datum.strength * 0.3;
+            });
+        }, [adjacency, selectedId]);
+
+        return React.createElement(
+          "div",
+          { className: "graph-frame", ref: frameRef },
+          React.createElement("svg", {
+            ref: svgRef,
+            className: "graph-svg",
+            role: "img",
+            "aria-label": "Interactive force-directed graph with 100 random nodes",
+          }),
+          tooltip &&
+            React.createElement(
+              "div",
+              {
+                className: "tooltip",
+                style: {
+                  left: `${tooltip.x}px`,
+                  top: `${tooltip.y}px`,
+                },
+              },
+              React.createElement("strong", null, tooltip.datum.label),
+              React.createElement(
+                "span",
+                null,
+                `Intensity ${tooltip.datum.value} · Cluster ${tooltip.datum.group + 1}`
+              ),
+              React.createElement("span", null, `${tooltip.degree} connected neighbors`)
+            )
+        );
+      }
+
+      function App() {
+        const [graph, setGraph] = useState(() => generateGraphData());
+        const [selectedId, setSelectedId] = useState(null);
+
+        const adjacency = useMemo(() => {
+          const map = new Map();
+
+          graph.nodes.forEach((node) => {
+            map.set(node.id, new Set([node.id]));
+          });
+
+          graph.links.forEach((link) => {
+            const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+            const targetId = typeof link.target === "object" ? link.target.id : link.target;
+
+            map.get(sourceId)?.add(targetId);
+            map.get(targetId)?.add(sourceId);
+          });
+
+          return map;
+        }, [graph]);
+
+        const selectedNode = useMemo(
+          () => graph.nodes.find((node) => node.id === selectedId) ?? null,
+          [graph.nodes, selectedId]
+        );
+
+        const selectedNeighbors = useMemo(() => {
+          if (!selectedId) {
+            return [];
+          }
+
+          return Array.from(adjacency.get(selectedId) ?? [])
+            .filter((id) => id !== selectedId)
+            .map((id) => graph.nodes.find((node) => node.id === id))
+            .filter(Boolean)
+            .sort((left, right) => right.value - left.value);
+        }, [adjacency, graph.nodes, selectedId]);
+
+        const averageDegree = (graph.links.length * 2) / graph.nodes.length;
+
+        const regenerate = () => {
+          startTransition(() => {
+            setGraph(generateGraphData());
+            setSelectedId(null);
+          });
+        };
+
+        return React.createElement(
+          "main",
+          { className: "app-shell" },
+          React.createElement(
+            "section",
+            { className: "hero" },
+            React.createElement("div", { className: "eyebrow" }, "React + D3 Force View"),
+            React.createElement("h1", null, "Random Signal Topology"),
+            React.createElement(
+              "p",
+              null,
+              "单文件 HTML 应用，使用 CDN 直接加载 React 和 D3.js。图中包含 100 个随机数据点，支持悬停 Tooltip、点击邻接高亮与滚轮缩放。"
+            )
+          ),
+          React.createElement(
+            "section",
+            { className: "dashboard" },
+            React.createElement(
+              "div",
+              { className: "panel graph-panel" },
+              React.createElement(
+                "div",
+                { className: "panel-header" },
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement("h2", null, "Force-directed Graph"),
+                  React.createElement(
+                    "p",
+                    null,
+                    "拖动画布浏览全图，滚轮缩放。点击节点后将只强调其直接邻居与关联边。"
+                  )
+                ),
+                React.createElement(
+                  "div",
+                  { className: "action-row" },
+                  React.createElement(
+                    "button",
+                    {
+                      type: "button",
+                      className: "ghost-button",
+                      onClick: regenerate,
+                    },
+                    "Regenerate"
+                  )
+                )
+              ),
+              React.createElement(ForceGraph, {
+                graph,
+                adjacency,
+                selectedId,
+                setSelectedId,
+              })
+            ),
+            React.createElement(
+              "aside",
+              { className: "panel side-panel" },
+              React.createElement("h2", null, "Graph Snapshot"),
+              React.createElement(
+                "div",
+                { className: "stat-grid" },
+                React.createElement(
+                  "div",
+                  { className: "stat-card" },
+                  React.createElement("span", null, "Nodes"),
+                  React.createElement("strong", null, graph.nodes.length)
+                ),
+                React.createElement(
+                  "div",
+                  { className: "stat-card" },
+                  React.createElement("span", null, "Edges"),
+                  React.createElement("strong", null, graph.links.length)
+                ),
+                React.createElement(
+                  "div",
+                  { className: "stat-card" },
+                  React.createElement("span", null, "Avg Degree"),
+                  React.createElement("strong", null, averageDegree.toFixed(1))
+                )
+              ),
+              React.createElement(
+                "div",
+                { className: "info-card" },
+                React.createElement("span", { className: "label" }, "Interaction"),
+                React.createElement("h3", null, "How to explore"),
+                React.createElement(
+                  "ul",
+                  { className: "hint-list" },
+                  React.createElement("li", null, "悬停节点显示编号、强度值与邻接数量。"),
+                  React.createElement("li", null, "点击节点高亮它与直接相连的节点及边。"),
+                  React.createElement("li", null, "点击空白区域可取消高亮，拖动节点可重新扰动力场。"),
+                  React.createElement("li", null, "滚轮缩放和拖拽平移可以快速查看局部结构。")
+                )
+              ),
+              React.createElement(
+                "div",
+                { className: `info-card${selectedNode ? " selected-node" : ""}` },
+                React.createElement("span", { className: "label" }, "Selection"),
+                selectedNode
+                  ? React.createElement(
+                      React.Fragment,
+                      null,
+                      React.createElement("h3", null, selectedNode.label),
+                      React.createElement(
+                        "p",
+                        null,
+                        `当前节点强度 ${selectedNode.value}，属于 Cluster ${selectedNode.group + 1}。`
+                      ),
+                      React.createElement(
+                        "div",
+                        { className: "node-meta" },
+                        React.createElement("span", {
+                          className: "swatch",
+                          style: { color: GROUP_COLORS[selectedNode.group] },
+                        }),
+                        React.createElement(
+                          "p",
+                          null,
+                          `${selectedNeighbors.length} direct neighbors highlighted`
+                        )
+                      ),
+                      React.createElement(
+                        "ul",
+                        { className: "neighbor-list" },
+                        selectedNeighbors.map((neighbor) =>
+                          React.createElement(
+                            "li",
+                            { key: neighbor.id },
+                            `${neighbor.label} · intensity ${neighbor.value}`
+                          )
+                        )
+                      )
+                    )
+                  : React.createElement(
+                      React.Fragment,
+                      null,
+                      React.createElement("h3", null, "No active node"),
+                      React.createElement(
+                        "p",
+                        { className: "empty-note" },
+                        "点击图中的任意节点后，这里会显示它的邻接节点列表与当前状态。"
+                      )
+                    )
+              ),
+              React.createElement(
+                "p",
+                { className: "footer-note" },
+                "Dark UI · responsive layout · zero build tooling"
+              )
+            )
+          )
+        );
+      }
+
+      createRoot(document.getElementById("root")).render(React.createElement(App));
+    </script>
+  </body>
+</html>
