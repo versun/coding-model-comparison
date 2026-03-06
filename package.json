@@ -1,0 +1,12 @@
+{
+  "name": "coding-model-comparison",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "evaluate": "node scripts/evaluate-models.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.54.2",
+    "pngjs": "^7.0.0"
+  }
+}

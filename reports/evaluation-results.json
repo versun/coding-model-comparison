@@ -1,0 +1,839 @@
+{
+  "generatedAt": "2026-03-06 08:23:36 CST",
+  "runner": "Playwright Core + Google Chrome 145",
+  "rubric": [
+    {
+      "key": "loadStability",
+      "label": "渲染稳定性",
+      "points": 10,
+      "detail": "页面在 15 秒内完成渲染，存在可交互 SVG，且没有致命脚本错误。"
+    },
+    {
+      "key": "graphData",
+      "label": "图数据完整度",
+      "points": 18,
+      "detail": "桌面端检测可见节点数是否接近 100，且存在足够数量的边。"
+    },
+    {
+      "key": "tooltip",
+      "label": "Tooltip 交互",
+      "points": 16,
+      "detail": "悬停真实节点，要求 Tooltip 可见且信息不止一个字段。"
+    },
+    {
+      "key": "highlight",
+      "label": "邻接高亮",
+      "points": 20,
+      "detail": "点击节点后，要求节点或边样式发生明显变化，并能区分相邻与非相邻元素。"
+    },
+    {
+      "key": "zoom",
+      "label": "缩放能力",
+      "points": 12,
+      "detail": "对图区域发送滚轮事件，要求缩放容器 transform 或 viewBox 明显变化。"
+    },
+    {
+      "key": "infoArchitecture",
+      "label": "信息架构",
+      "points": 10,
+      "detail": "统计标题、说明文案、辅助信息块、按钮/摘要等信息层次是否充分。"
+    },
+    {
+      "key": "darkTheme",
+      "label": "暗色主题",
+      "points": 6,
+      "detail": "基于真实截图采样背景亮度，并结合文本亮度判断是否符合暗色页面。"
+    },
+    {
+      "key": "responsive",
+      "label": "移动端适配",
+      "points": 8,
+      "detail": "在 390px 宽视口重新加载，检查水平溢出、图区域高度和节点数量。"
+    }
+  ],
+  "prompt": "不要使用任何的mcp和skill，请编写一个单文件的 HTML/JS 应用（不使用构建工具，使用 CDN 引入 React 和 D3.js）。\n功能：\n\n生成 100 个随机数据点。\n\n绘制一个力导向图（Force-directed Graph）。\n\n实现交互：鼠标悬停节点显示 Tooltip，点击节点高亮其相邻节点，支持滚轮缩放画布。\n\nUI 风格要求现代、极简、暗色模式。",
+  "models": [
+    {
+      "file": "gpt-5.4.html",
+      "name": "GPT 5.4",
+      "runner": "Codex CLI",
+      "durationText": "4分 20秒",
+      "durationSeconds": 260,
+      "baseline": true,
+      "totalScore": 99,
+      "scores": {
+        "loadStability": 10,
+        "graphData": 18,
+        "tooltip": 15,
+        "highlight": 20,
+        "zoom": 12,
+        "infoArchitecture": 10,
+        "darkTheme": 6,
+        "responsive": 8
+      },
+      "metrics": {
+        "desktop": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 241,
+          "targetCircleDomIndex": 36,
+          "targetCircleBox": {
+            "x": 633.534,
+            "y": 635.811,
+            "width": 10.618,
+            "height": 10.618,
+            "cx": 638.843,
+            "cy": 641.121
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "zoom-layer",
+            "transform": "translate(41.14999999999998,31.899999999999977) scale(0.9)",
+            "scale": 0.9,
+            "descendantCircles": 100,
+            "descendantLines": 242,
+            "score": 904
+          },
+          "headingCount": 5,
+          "controlCount": 1,
+          "descriptiveBlockCount": 15,
+          "statsBlockCount": 5,
+          "infoContainerCount": 12,
+          "viewportMeta": true,
+          "ariaGraphCount": 1,
+          "graphAreaHeight": 637.9,
+          "graphAreaWidth": 822.9,
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "viewportHeight": 900,
+          "rootTextColor": "rgb(243, 245, 247)"
+        },
+        "mobile": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 237,
+          "targetCircleDomIndex": 23,
+          "targetCircleBox": {
+            "x": 222.456,
+            "y": 504.644,
+            "width": 17.172,
+            "height": 17.172,
+            "cx": 231.042,
+            "cy": 513.23
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "zoom-layer",
+            "transform": "translate(16.900000000000006,20.900000000000006) scale(0.9)",
+            "scale": 0.9,
+            "descendantCircles": 100,
+            "descendantLines": 242,
+            "score": 904
+          },
+          "headingCount": 5,
+          "controlCount": 1,
+          "descriptiveBlockCount": 15,
+          "statsBlockCount": 5,
+          "infoContainerCount": 12,
+          "viewportMeta": true,
+          "ariaGraphCount": 1,
+          "graphAreaHeight": 418,
+          "graphAreaWidth": 338,
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "viewportHeight": 844,
+          "rootTextColor": "rgb(243, 245, 247)"
+        },
+        "tooltip": {
+          "visible": true,
+          "count": 1,
+          "textLength": 54,
+          "richness": 3,
+          "sample": "Point 037Intensity 20 · Cluster 42 connected neighbors"
+        },
+        "highlight": {
+          "targetChanged": true,
+          "nodeStyleChanges": 100,
+          "linkStyleChanges": 234,
+          "nodeOpacityShiftCount": 97,
+          "nodeFillShiftCount": 100,
+          "linkOpacityShiftCount": 0,
+          "dimmedNodes": 97,
+          "highlightedClassCount": 0
+        },
+        "zoom": {
+          "changed": true,
+          "beforeScale": 0.9,
+          "afterScale": 2.8,
+          "beforeTransform": "translate(41.14999999999998,31.899999999999977) scale(0.9)",
+          "afterTransform": "translate(-739.7597669813367,-573.0782789442275) scale(2.8)"
+        },
+        "theme": {
+          "averageRgb": "rgb(19, 22, 26)",
+          "luminance": 21.7
+        },
+        "rootTextColor": "rgb(243, 245, 247)",
+        "consoleErrors": [
+          "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        ],
+        "pageErrors": []
+      },
+      "notes": [
+        "Tooltip 文本长度 54",
+        "点击后节点变化 100，边变化 234",
+        "缩放比例 0.9 -> 2.8"
+      ],
+      "rank": 1
+    },
+    {
+      "file": "glm-5.html",
+      "name": "GLM 5",
+      "runner": "Claude Code",
+      "durationText": "2分 14秒",
+      "durationSeconds": 134,
+      "baseline": false,
+      "totalScore": 98.5,
+      "scores": {
+        "loadStability": 10,
+        "graphData": 18,
+        "tooltip": 15,
+        "highlight": 20,
+        "zoom": 12,
+        "infoArchitecture": 9.5,
+        "darkTheme": 6,
+        "responsive": 8
+      },
+      "metrics": {
+        "desktop": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 283,
+          "targetCircleDomIndex": 2,
+          "targetCircleBox": {
+            "x": 704.415,
+            "y": 437.759,
+            "width": 19.604,
+            "height": 19.604,
+            "cx": 714.217,
+            "cy": 447.561
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "zoom-container",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 288,
+            "score": 996
+          },
+          "headingCount": 1,
+          "controlCount": 2,
+          "descriptiveBlockCount": 5,
+          "statsBlockCount": 5,
+          "infoContainerCount": 11,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 900,
+          "graphAreaWidth": 1440,
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "viewportHeight": 900,
+          "rootTextColor": "rgb(230, 237, 243)"
+        },
+        "mobile": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 285,
+          "targetCircleDomIndex": 2,
+          "targetCircleBox": {
+            "x": 180.365,
+            "y": 411.404,
+            "width": 19.604,
+            "height": 19.604,
+            "cx": 190.167,
+            "cy": 421.205
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "zoom-container",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 288,
+            "score": 996
+          },
+          "headingCount": 1,
+          "controlCount": 2,
+          "descriptiveBlockCount": 5,
+          "statsBlockCount": 5,
+          "infoContainerCount": 11,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 844,
+          "graphAreaWidth": 390,
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "viewportHeight": 844,
+          "rootTextColor": "rgb(230, 237, 243)"
+        },
+        "tooltip": {
+          "visible": true,
+          "count": 8,
+          "textLength": 34,
+          "richness": 10,
+          "sample": "Node 3Group1Value11.57Connections2"
+        },
+        "highlight": {
+          "targetChanged": false,
+          "nodeStyleChanges": 99,
+          "linkStyleChanges": 287,
+          "nodeOpacityShiftCount": 95,
+          "nodeFillShiftCount": 4,
+          "linkOpacityShiftCount": 0,
+          "dimmedNodes": 95,
+          "highlightedClassCount": 4
+        },
+        "zoom": {
+          "changed": true,
+          "beforeScale": 1,
+          "afterScale": 3.4822,
+          "beforeTransform": "",
+          "afterTransform": "translate(-1787.1856222928373,-1116.9910139330234) scale(3.4822022531844965)"
+        },
+        "theme": {
+          "averageRgb": "rgb(26, 37, 53)",
+          "luminance": 35.8
+        },
+        "rootTextColor": "rgb(230, 237, 243)",
+        "consoleErrors": [],
+        "pageErrors": []
+      },
+      "notes": [
+        "Tooltip 文本长度 34",
+        "点击后节点变化 99，边变化 287",
+        "缩放比例 1 -> 3.48"
+      ],
+      "rank": 2
+    },
+    {
+      "file": "opus-4.6.html",
+      "name": "Opus 4.6",
+      "runner": "Claude Code",
+      "durationText": "53秒",
+      "durationSeconds": 53,
+      "baseline": false,
+      "totalScore": 96.5,
+      "scores": {
+        "loadStability": 10,
+        "graphData": 18,
+        "tooltip": 15,
+        "highlight": 20,
+        "zoom": 12,
+        "infoArchitecture": 7.5,
+        "darkTheme": 6,
+        "responsive": 8
+      },
+      "metrics": {
+        "desktop": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 160,
+          "targetCircleDomIndex": 41,
+          "targetCircleBox": {
+            "x": 736.935,
+            "y": 441.283,
+            "width": 12.548,
+            "height": 12.548,
+            "cx": 743.209,
+            "cy": 447.557
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "",
+            "transform": "translate(720,450) scale(0.9)",
+            "scale": 0.9,
+            "descendantCircles": 100,
+            "descendantLines": 160,
+            "score": 620
+          },
+          "headingCount": 1,
+          "controlCount": 0,
+          "descriptiveBlockCount": 4,
+          "statsBlockCount": 1,
+          "infoContainerCount": 2,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 900,
+          "graphAreaWidth": 1440,
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "viewportHeight": 900,
+          "rootTextColor": "rgb(224, 224, 224)"
+        },
+        "mobile": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 159,
+          "targetCircleDomIndex": 41,
+          "targetCircleBox": {
+            "x": 212.804,
+            "y": 413.196,
+            "width": 12.548,
+            "height": 12.548,
+            "cx": 219.078,
+            "cy": 419.471
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "",
+            "transform": "translate(195,422) scale(0.9)",
+            "scale": 0.9,
+            "descendantCircles": 100,
+            "descendantLines": 160,
+            "score": 620
+          },
+          "headingCount": 1,
+          "controlCount": 0,
+          "descriptiveBlockCount": 4,
+          "statsBlockCount": 1,
+          "infoContainerCount": 2,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 844,
+          "graphAreaWidth": 390,
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "viewportHeight": 844,
+          "rootTextColor": "rgb(224, 224, 224)"
+        },
+        "tooltip": {
+          "visible": true,
+          "count": 1,
+          "textLength": 40,
+          "richness": 2,
+          "sample": "N-041Group: alphaValue: 34Connections: 3"
+        },
+        "highlight": {
+          "targetChanged": true,
+          "nodeStyleChanges": 100,
+          "linkStyleChanges": 159,
+          "nodeOpacityShiftCount": 96,
+          "nodeFillShiftCount": 4,
+          "linkOpacityShiftCount": 0,
+          "dimmedNodes": 96,
+          "highlightedClassCount": 0
+        },
+        "zoom": {
+          "changed": true,
+          "beforeScale": 0.9,
+          "afterScale": 3.134,
+          "beforeTransform": "translate(720,450) scale(0.9)",
+          "afterTransform": "translate(720,450) scale(3.133982027866047)"
+        },
+        "theme": {
+          "averageRgb": "rgb(10, 10, 15)",
+          "luminance": 10.4
+        },
+        "rootTextColor": "rgb(224, 224, 224)",
+        "consoleErrors": [],
+        "pageErrors": []
+      },
+      "notes": [
+        "Tooltip 文本长度 40",
+        "点击后节点变化 100，边变化 159",
+        "缩放比例 0.9 -> 3.13"
+      ],
+      "rank": 3
+    },
+    {
+      "file": "gpt-5.3-codex.html",
+      "name": "GPT 5.3 Codex",
+      "runner": "Codex CLI",
+      "durationText": "1分 40秒",
+      "durationSeconds": 100,
+      "baseline": false,
+      "totalScore": 90.5,
+      "scores": {
+        "loadStability": 10,
+        "graphData": 18,
+        "tooltip": 12,
+        "highlight": 20,
+        "zoom": 12,
+        "infoArchitecture": 4.5,
+        "darkTheme": 6,
+        "responsive": 8
+      },
+      "metrics": {
+        "desktop": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 263,
+          "targetCircleDomIndex": 4,
+          "targetCircleBox": {
+            "x": 723.196,
+            "y": 452.013,
+            "width": 12.6,
+            "height": 12.6,
+            "cx": 729.496,
+            "cy": 458.313
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "zoom-layer",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 269,
+            "score": 958
+          },
+          "headingCount": 0,
+          "controlCount": 0,
+          "descriptiveBlockCount": 3,
+          "statsBlockCount": 0,
+          "infoContainerCount": 0,
+          "viewportMeta": true,
+          "ariaGraphCount": 1,
+          "graphAreaHeight": 850,
+          "graphAreaWidth": 1390,
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "viewportHeight": 900,
+          "rootTextColor": "rgb(232, 237, 245)"
+        },
+        "mobile": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 262,
+          "targetCircleDomIndex": 4,
+          "targetCircleBox": {
+            "x": 198.126,
+            "y": 424.042,
+            "width": 12.6,
+            "height": 12.6,
+            "cx": 204.426,
+            "cy": 430.342
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "zoom-layer",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 269,
+            "score": 958
+          },
+          "headingCount": 0,
+          "controlCount": 0,
+          "descriptiveBlockCount": 3,
+          "statsBlockCount": 0,
+          "infoContainerCount": 0,
+          "viewportMeta": true,
+          "ariaGraphCount": 1,
+          "graphAreaHeight": 794,
+          "graphAreaWidth": 340,
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "viewportHeight": 844,
+          "rootTextColor": "rgb(232, 237, 245)"
+        },
+        "tooltip": {
+          "visible": true,
+          "count": 1,
+          "textLength": 19,
+          "richness": 3,
+          "sample": "Node 5ID: 4Group: 2"
+        },
+        "highlight": {
+          "targetChanged": true,
+          "nodeStyleChanges": 100,
+          "linkStyleChanges": 260,
+          "nodeOpacityShiftCount": 94,
+          "nodeFillShiftCount": 100,
+          "linkOpacityShiftCount": 0,
+          "dimmedNodes": 94,
+          "highlightedClassCount": 0
+        },
+        "zoom": {
+          "changed": true,
+          "beforeScale": 1,
+          "afterScale": 3.4822,
+          "beforeTransform": "",
+          "afterTransform": "translate(-1725.1305659632249,-1054.935957603411) scale(3.4822022531844965)"
+        },
+        "theme": {
+          "averageRgb": "rgb(19, 45, 52)",
+          "luminance": 40
+        },
+        "rootTextColor": "rgb(232, 237, 245)",
+        "consoleErrors": [],
+        "pageErrors": []
+      },
+      "notes": [
+        "Tooltip 文本长度 19",
+        "点击后节点变化 100，边变化 260",
+        "缩放比例 1 -> 3.48"
+      ],
+      "rank": 4
+    },
+    {
+      "file": "kimi-2.5.html",
+      "name": "Kimi 2.5",
+      "runner": "Claude Code",
+      "durationText": "1分 53秒",
+      "durationSeconds": 113,
+      "baseline": false,
+      "totalScore": 84.5,
+      "scores": {
+        "loadStability": 10,
+        "graphData": 18,
+        "tooltip": 15,
+        "highlight": 6,
+        "zoom": 12,
+        "infoArchitecture": 9.5,
+        "darkTheme": 6,
+        "responsive": 8
+      },
+      "metrics": {
+        "desktop": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 192,
+          "targetCircleDomIndex": 87,
+          "targetCircleBox": {
+            "x": 684.857,
+            "y": 455.674,
+            "width": 46.367,
+            "height": 46.367,
+            "cx": 708.04,
+            "cy": 478.857
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 192,
+            "score": 684
+          },
+          "headingCount": 1,
+          "controlCount": 2,
+          "descriptiveBlockCount": 5,
+          "statsBlockCount": 8,
+          "infoContainerCount": 14,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 900,
+          "graphAreaWidth": 1440,
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "viewportHeight": 900,
+          "rootTextColor": "rgb(228, 228, 231)"
+        },
+        "mobile": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 190,
+          "targetCircleDomIndex": 87,
+          "targetCircleBox": {
+            "x": 158.847,
+            "y": 428.068,
+            "width": 46.367,
+            "height": 46.367,
+            "cx": 182.03,
+            "cy": 451.251
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 192,
+            "score": 684
+          },
+          "headingCount": 1,
+          "controlCount": 2,
+          "descriptiveBlockCount": 5,
+          "statsBlockCount": 8,
+          "infoContainerCount": 14,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 844,
+          "graphAreaWidth": 390,
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "viewportHeight": 844,
+          "rootTextColor": "rgb(228, 228, 231)"
+        },
+        "tooltip": {
+          "visible": true,
+          "count": 13,
+          "textLength": 26,
+          "richness": 12,
+          "sample": "名称Node 88群组Group 4数值92连接数5"
+        },
+        "highlight": {
+          "targetChanged": true,
+          "nodeStyleChanges": 1,
+          "linkStyleChanges": 0,
+          "nodeOpacityShiftCount": 0,
+          "nodeFillShiftCount": 0,
+          "linkOpacityShiftCount": 0,
+          "dimmedNodes": 0,
+          "highlightedClassCount": 0
+        },
+        "zoom": {
+          "changed": true,
+          "beforeScale": 1,
+          "afterScale": 3.4822,
+          "beforeTransform": "",
+          "afterTransform": "translate(-1787.1856222928373,-1116.9910139330234) scale(3.4822022531844965)"
+        },
+        "theme": {
+          "averageRgb": "rgb(41, 32, 42)",
+          "luminance": 34.6
+        },
+        "rootTextColor": "rgb(228, 228, 231)",
+        "consoleErrors": [],
+        "pageErrors": []
+      },
+      "notes": [
+        "Tooltip 文本长度 26",
+        "点击后节点变化 1，边变化 0",
+        "缩放比例 1 -> 3.48"
+      ],
+      "rank": 5
+    },
+    {
+      "file": "minimax-2.5.html",
+      "name": "Minimax 2.5",
+      "runner": "Claude Code",
+      "durationText": "2分 38秒",
+      "durationSeconds": 158,
+      "baseline": false,
+      "totalScore": 74.5,
+      "scores": {
+        "loadStability": 10,
+        "graphData": 18,
+        "tooltip": 0,
+        "highlight": 20,
+        "zoom": 12,
+        "infoArchitecture": 0.5,
+        "darkTheme": 6,
+        "responsive": 8
+      },
+      "metrics": {
+        "desktop": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 204,
+          "targetCircleDomIndex": 70,
+          "targetCircleBox": {
+            "x": 616.531,
+            "y": 312.606,
+            "width": 20,
+            "height": 20,
+            "cx": 626.531,
+            "cy": 322.606
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 208,
+            "score": 716
+          },
+          "headingCount": 0,
+          "controlCount": 0,
+          "descriptiveBlockCount": 0,
+          "statsBlockCount": 0,
+          "infoContainerCount": 0,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 900,
+          "graphAreaWidth": 1440,
+          "scrollWidth": 1440,
+          "viewportWidth": 1440,
+          "viewportHeight": 900,
+          "rootTextColor": "rgb(201, 209, 217)"
+        },
+        "mobile": {
+          "svgCount": 1,
+          "nodeCount": 100,
+          "linkCount": 204,
+          "targetCircleDomIndex": 70,
+          "targetCircleBox": {
+            "x": 94.442,
+            "y": 295.651,
+            "width": 20,
+            "height": 20,
+            "cx": 104.442,
+            "cy": 305.651
+          },
+          "zoomProbe": {
+            "domIndex": 0,
+            "className": "",
+            "transform": "",
+            "scale": 1,
+            "descendantCircles": 100,
+            "descendantLines": 208,
+            "score": 716
+          },
+          "headingCount": 0,
+          "controlCount": 0,
+          "descriptiveBlockCount": 0,
+          "statsBlockCount": 0,
+          "infoContainerCount": 0,
+          "viewportMeta": true,
+          "ariaGraphCount": 0,
+          "graphAreaHeight": 844,
+          "graphAreaWidth": 390,
+          "scrollWidth": 390,
+          "viewportWidth": 390,
+          "viewportHeight": 844,
+          "rootTextColor": "rgb(201, 209, 217)"
+        },
+        "tooltip": {
+          "visible": false,
+          "count": 0,
+          "textLength": 0,
+          "richness": 0,
+          "sample": ""
+        },
+        "highlight": {
+          "targetChanged": true,
+          "nodeStyleChanges": 100,
+          "linkStyleChanges": 4,
+          "nodeOpacityShiftCount": 95,
+          "nodeFillShiftCount": 5,
+          "linkOpacityShiftCount": 0,
+          "dimmedNodes": 95,
+          "highlightedClassCount": 0
+        },
+        "zoom": {
+          "changed": true,
+          "beforeScale": 1,
+          "afterScale": 3.4822,
+          "beforeTransform": "",
+          "afterTransform": "translate(-1787.1856222928373,-1116.9910139330234) scale(3.4822022531844965)"
+        },
+        "theme": {
+          "averageRgb": "rgb(13, 17, 23)",
+          "luminance": 16.6
+        },
+        "rootTextColor": "rgb(201, 209, 217)",
+        "consoleErrors": [],
+        "pageErrors": []
+      },
+      "notes": [
+        "未检测到可见 Tooltip",
+        "点击后节点变化 100，边变化 4",
+        "缩放比例 1 -> 3.48"
+      ],
+      "rank": 6
+    }
+  ]
+}
