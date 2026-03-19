@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Force-Directed Graph</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/d3@7/dist/d3.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
+  #root { width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useEffect, useRef, useState, useCallback } = React;
+
+const N = 100;
+const COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6'];
+
+function generateGraph() {
+  const nodes = Array.from({ length: N }, (_, i) => ({
+    id: i, group: Math.floor(Math.random() * 5), value: Math.random() * 10 + 1,
+  }));
+  const links = [];
+  const linkSet = new Set();
+  for (let i = 0; i < N; i++) {
+    const degree = Math.floor(Math.random() * 3) + 1;
+    for (let j = 0; j < degree; j++) {
+      let t = Math.floor(Math.random() * N);
+      if (t === i) t = (t + 1) % N;
+      const key = Math.min(i, t) + '-' + Math.max(i, t);
+      if (!linkSet.has(key)) { linkSet.add(key); links.push({ source: i, target: t }); }
+    }
+  }
+  return { nodes, links };
+}
+
+function App() {
+  const data = useRef(generateGraph()).current;
+  const nodesRef = useRef(data.nodes);
+  const linksRef = useRef(data.links);
+  const [tick, setTick] = useState(0);
+  const [highlightId, setHighlightId] = useState(null);
+  const [tooltip, setTooltip] = useState(null);
+  const [zoomState, setZoomState] = useState({ k: 1, x: 0, y: 0 });
+  const svgRef = useRef(null);
+
+  const neighborMap = useRef(new Map()).current;
+  useEffect(() => {
+    data.links.forEach(l => {
+      if (!neighborMap.has(l.source)) neighborMap.set(l.source, new Set());
+      if (!neighborMap.has(l.target)) neighborMap.set(l.target, new Set());
+      neighborMap.get(l.source).add(l.target);
+      neighborMap.get(l.target).add(l.source);
+    });
+  }, []);
+
+  const isLit = useCallback((id) => {
+    if (highlightId === null) return true;
+    return id === highlightId || neighborMap.get(highlightId)?.has(id);
+  }, [highlightId]);
+
+  useEffect(() => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const simulation = d3.forceSimulation(nodesRef.current)
+      .force('link', d3.forceLink(linksRef.current).id(d => d.id).distance(55))
+      .force('charge', d3.forceManyBody().strength(-140))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(d => d.value * 1.5 + 6))
+      .on('tick', () => setTick(t => t + 1));
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.15, 6])
+      .on('zoom', (e) => setZoomState(e.transform));
+    d3.select(svgRef.current).call(zoom);
+
+    return () => simulation.stop();
+  }, []);
+
+  const nodes = nodesRef.current;
+  const links = linksRef.current;
+
+  return (
+    <svg ref={svgRef} width="100%" height="100%" style={{ background: '#0a0a0a' }}>
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+
+      <g transform={`translate(${zoomState.x},${zoomState.y}) scale(${zoomState.k})`}>
+        {/* Links */}
+        {links.map((l, i) => {
+          const s = l.source, t = l.target;
+          const lit = isLit(s.id) && isLit(t.id);
+          return (
+            <line key={`l${i}`}
+              x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+              stroke={lit ? '#3a3a4a' : '#151518'}
+              strokeWidth={lit ? 1 : 0.4}
+              style={{ transition: 'stroke 0.2s, stroke-width 0.2s' }}
+            />
+          );
+        })}
+
+        {/* Nodes */}
+        {nodes.map(n => {
+          const lit = isLit(n.id);
+          return (
+            <g key={`n${n.id}`}
+              onMouseOver={(e) => {
+                const svgRect = svgRef.current.getBoundingClientRect();
+                setTooltip({
+                  x: e.clientX - svgRect.left,
+                  y: e.clientY - svgRect.top,
+                  node: n
+                });
+              }}
+              onMouseOut={() => setTooltip(null)}
+              onClick={() => setHighlightId(prev => prev === n.id ? null : n.id)}
+              style={{ cursor: 'pointer' }}
+            >
+              {highlightId === n.id && (
+                <circle cx={n.x} cy={n.y} r={n.value * 1.5 + 8}
+                  fill="none" stroke={COLORS[n.group]} strokeWidth="1.5" opacity="0.5"
+                  filter="url(#glow)" />
+              )}
+              <circle cx={n.x} cy={n.y} r={n.value * 1.5 + 3}
+                fill={COLORS[n.group]}
+                opacity={lit ? 1 : 0.08}
+                style={{ transition: 'opacity 0.25s' }}
+              />
+            </g>
+          );
+        })}
+      </g>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <g transform={`translate(${tooltip.x + 14}, ${tooltip.y - 12})`}>
+          <rect x="0" y="0" width="150" height="56" rx="6"
+            fill="#1a1a2e" stroke="#2a2a3a" strokeWidth="1" opacity="0.96" />
+          <text x="10" y="20" fill="#e8e8e8" fontSize="13" fontWeight="600" fontFamily="sans-serif">
+            Node #{tooltip.node.id}
+          </text>
+          <text x="10" y="40" fill="#777" fontSize="11" fontFamily="sans-serif">
+            Group {tooltip.node.group} · Size {tooltip.node.value.toFixed(1)}
+          </text>
+        </g>
+      )}
+
+      {/* Legend */}
+      <g transform="translate(16, 16)">
+        <rect x="0" y="0" width="76" height="134" rx="6"
+          fill="#111118" stroke="#1e1e28" strokeWidth="1" opacity="0.92" />
+        <text x="10" y="20" fill="#ccc" fontSize="11" fontWeight="600" fontFamily="sans-serif">Groups</text>
+        {COLORS.map((c, i) => (
+          <g key={i} transform={`translate(10, ${34 + i * 19})`}>
+            <circle r="4" fill={c} />
+            <text x="14" y="4" fill="#888" fontSize="10" fontFamily="sans-serif">Group {i}</text>
+          </g>
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -6,13 +6,24 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { PNG } from "pngjs";
 
+import {
+  RUBRIC,
+  buildScorecard,
+  getRubricTotalPoints,
+} from "./evaluation-scoring.mjs";
+import {
+  isGraphRenderable,
+  isStableGraphWindow,
+} from "./evaluation-stability.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const REPORTS_DIR = path.join(ROOT, "reports");
 const RESULTS_PATH = path.join(REPORTS_DIR, "evaluation-results.json");
 const INDEX_PATH = path.join(ROOT, "index.html");
 const PORT = 4173;
-const CHROME_EXECUTABLE = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CHROME_EXECUTABLE =
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const TEST_PROMPT = `不要使用任何的mcp和skill，请编写一个单文件的 HTML/JS 应用（不使用构建工具，使用 CDN 引入 React 和 D3.js）。
 功能：
@@ -25,58 +36,31 @@ const TEST_PROMPT = `不要使用任何的mcp和skill，请编写一个单文件
 
 UI 风格要求现代、极简、暗色模式。`;
 
-const RUBRIC = [
-  {
-    key: "loadStability",
-    label: "渲染稳定性",
-    points: 10,
-    detail: "页面在 15 秒内完成渲染，存在可交互 SVG，且没有致命脚本错误。",
-  },
-  {
-    key: "graphData",
-    label: "图数据完整度",
-    points: 18,
-    detail: "桌面端检测可见节点数是否接近 100，且存在足够数量的边。",
-  },
-  {
-    key: "tooltip",
-    label: "Tooltip 交互",
-    points: 16,
-    detail: "悬停真实节点，要求 Tooltip 可见且信息不止一个字段。",
-  },
-  {
-    key: "highlight",
-    label: "邻接高亮",
-    points: 20,
-    detail: "点击节点后，要求节点或边样式发生明显变化，并能区分相邻与非相邻元素。",
-  },
-  {
-    key: "zoom",
-    label: "缩放能力",
-    points: 12,
-    detail: "对图区域发送滚轮事件，要求缩放容器 transform 或 viewBox 明显变化。",
-  },
-  {
-    key: "infoArchitecture",
-    label: "信息架构",
-    points: 10,
-    detail: "统计标题、说明文案、辅助信息块、按钮/摘要等信息层次是否充分。",
-  },
-  {
-    key: "darkTheme",
-    label: "暗色主题",
-    points: 6,
-    detail: "基于真实截图采样背景亮度，并结合文本亮度判断是否符合暗色页面。",
-  },
-  {
-    key: "responsive",
-    label: "移动端适配",
-    points: 8,
-    detail: "在 390px 宽视口重新加载，检查水平溢出、图区域高度和节点数量。",
-  },
-];
-
 const MODELS = [
+  {
+    file: "gpt-5.4-mini.html",
+    name: "GPT 5.4 Mini",
+    runner: "Codex CLI",
+    durationText: "4分 14秒",
+    durationSeconds: 254,
+    baseline: false,
+  },
+  {
+    file: "mimo-v2-pro.html",
+    name: "Mimo V2 Pro",
+    runner: "Claude Code",
+    durationText: "1分 03秒",
+    durationSeconds: 63,
+    baseline: false,
+  },
+  {
+    file: "minimax-m2.7.html",
+    name: "Minimax 2.7",
+    runner: "Claude Code",
+    durationText: "1分 03秒",
+    durationSeconds: 63,
+    baseline: false,
+  },
   {
     file: "gpt-5.4.html",
     name: "GPT 5.4",
@@ -179,30 +163,13 @@ function averageRgb(list) {
       g: accumulator.g + color.g,
       b: accumulator.b + color.b,
     }),
-    { r: 0, g: 0, b: 0 }
+    { r: 0, g: 0, b: 0 },
   );
 
   return {
     r: Math.round(total.r / list.length),
     g: Math.round(total.g / list.length),
     b: Math.round(total.b / list.length),
-  };
-}
-
-function parseColorString(value) {
-  if (!value) {
-    return { r: 0, g: 0, b: 0 };
-  }
-
-  const match = value.match(/\d+/g);
-  if (!match || match.length < 3) {
-    return { r: 0, g: 0, b: 0 };
-  }
-
-  return {
-    r: Number(match[0]),
-    g: Number(match[1]),
-    b: Number(match[2]),
   };
 }
 
@@ -223,8 +190,10 @@ async function ensureReportsDir() {
 
 function startStaticServer(rootDir, port) {
   const server = http.createServer(async (request, response) => {
-    const rawPath = new URL(request.url ?? "/", `http://127.0.0.1:${port}`).pathname;
-    const normalizedPath = rawPath === "/" ? "/index.html" : decodeURIComponent(rawPath);
+    const rawPath = new URL(request.url ?? "/", `http://127.0.0.1:${port}`)
+      .pathname;
+    const normalizedPath =
+      rawPath === "/" ? "/index.html" : decodeURIComponent(rawPath);
     const requestedPath = path.resolve(rootDir, `.${normalizedPath}`);
 
     if (!requestedPath.startsWith(rootDir)) {
@@ -272,14 +241,24 @@ async function waitForGraph(page) {
   const timeoutMs = 15_000;
   const deadline = Date.now() + timeoutMs;
   let lastMetrics = null;
+  const samples = [];
 
   while (Date.now() < deadline) {
     lastMetrics = await collectPageMetrics(page);
-    if (lastMetrics.nodeCount >= 50 && lastMetrics.linkCount >= 20 && lastMetrics.svgCount >= 1) {
-      return lastMetrics;
+    if (isGraphRenderable(lastMetrics)) {
+      samples.push(lastMetrics);
+      if (samples.length > 4) {
+        samples.shift();
+      }
+
+      if (isStableGraphWindow(samples)) {
+        return lastMetrics;
+      }
+    } else {
+      samples.length = 0;
     }
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(250);
   }
 
   return lastMetrics;
@@ -342,9 +321,13 @@ async function collectPageMetrics(page) {
       return depth;
     };
 
-    const circleRecords = Array.from(document.querySelectorAll("svg circle")).map((element, domIndex) => {
+    const circleRecords = Array.from(
+      document.querySelectorAll("svg circle"),
+    ).map((element, domIndex) => {
       const rect = element.getBoundingClientRect();
-      const radius = Number.parseFloat(element.getAttribute("r") || `${Math.max(rect.width, rect.height) / 2}`);
+      const radius = Number.parseFloat(
+        element.getAttribute("r") || `${Math.max(rect.width, rect.height) / 2}`,
+      );
       return {
         domIndex,
         radius,
@@ -358,9 +341,15 @@ async function collectPageMetrics(page) {
       };
     });
 
-    const visibleCircles = circleRecords.filter((circle) => circle.visible && circle.radius >= 1.5);
-    const lines = Array.from(document.querySelectorAll("svg line, svg path")).filter(isVisible);
-    const visibleSvgs = Array.from(document.querySelectorAll("svg")).filter(isVisible);
+    const visibleCircles = circleRecords.filter(
+      (circle) => circle.visible && circle.radius >= 1.5,
+    );
+    const lines = Array.from(
+      document.querySelectorAll("svg line, svg path"),
+    ).filter(isVisible);
+    const visibleSvgs = Array.from(document.querySelectorAll("svg")).filter(
+      isVisible,
+    );
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const viewportCenterX = viewportWidth / 2;
@@ -400,12 +389,17 @@ async function collectPageMetrics(page) {
           score,
         };
       })
-      .filter((candidate) => candidate.descendantCircles + candidate.descendantLines >= 10)
+      .filter(
+        (candidate) =>
+          candidate.descendantCircles + candidate.descendantLines >= 10,
+      )
       .sort((left, right) => right.score - left.score);
 
     const zoomProbe = zoomCandidates[0] ?? null;
 
-    const nonSvgTextElements = Array.from(document.body.querySelectorAll("*")).filter((element) => {
+    const nonSvgTextElements = Array.from(
+      document.body.querySelectorAll("*"),
+    ).filter((element) => {
       if (!isVisible(element)) {
         return false;
       }
@@ -422,39 +416,50 @@ async function collectPageMetrics(page) {
       Array.from(
         new Set(
           elements
-            .map((element) => element.textContent?.replace(/\s+/g, " ").trim() ?? "")
-            .filter(Boolean)
-        )
+            .map(
+              (element) =>
+                element.textContent?.replace(/\s+/g, " ").trim() ?? "",
+            )
+            .filter(Boolean),
+        ),
       );
 
     const descriptiveBlocks = uniqueText(
       nonSvgTextElements.filter((element) => {
         const tag = element.tagName.toLowerCase();
         return ["p", "li", "small", "summary", "span", "div"].includes(tag);
-      })
+      }),
     ).filter((text) => text.length >= 16);
 
     const statsBlocks = uniqueText(nonSvgTextElements).filter(
-      (text) => text.length <= 36 && /\d/.test(text) && /[a-z\u4e00-\u9fff]/i.test(text)
+      (text) =>
+        text.length <= 36 &&
+        /\d/.test(text) &&
+        /[a-z\u4e00-\u9fff]/i.test(text),
     );
 
     const infoContainers = nonSvgTextElements.filter((element) => {
       const tag = element.tagName.toLowerCase();
       const className = element.className?.toString() ?? "";
       return (
-        ["section", "article", "aside", "header", "footer", "nav"].includes(tag) ||
-        /panel|card|hero|info|stat|meta|hint|legend|sidebar|summary|dashboard/i.test(className)
+        ["section", "article", "aside", "header", "footer", "nav"].includes(
+          tag,
+        ) ||
+        /panel|card|hero|info|stat|meta|hint|legend|sidebar|summary|dashboard/i.test(
+          className,
+        )
       );
     }).length;
 
     const graphAreaHeight = visibleSvgs.reduce(
-      (maxHeight, svg) => Math.max(maxHeight, svg.getBoundingClientRect().height),
-      0
+      (maxHeight, svg) =>
+        Math.max(maxHeight, svg.getBoundingClientRect().height),
+      0,
     );
 
     const graphAreaWidth = visibleSvgs.reduce(
       (maxWidth, svg) => Math.max(maxWidth, svg.getBoundingClientRect().width),
-      0
+      0,
     );
 
     const rootTextColor = getComputedStyle(document.body).color;
@@ -477,13 +482,14 @@ async function collectPageMetrics(page) {
       zoomProbe,
       headingCount: document.querySelectorAll("h1, h2, h3").length,
       controlCount: nonSvgTextElements.filter((element) =>
-        ["button", "a", "summary"].includes(element.tagName.toLowerCase())
+        ["button", "a", "summary"].includes(element.tagName.toLowerCase()),
       ).length,
       descriptiveBlockCount: descriptiveBlocks.length,
       statsBlockCount: statsBlocks.length,
       infoContainerCount: infoContainers,
       viewportMeta: Boolean(document.querySelector('meta[name="viewport"]')),
-      ariaGraphCount: document.querySelectorAll("svg[aria-label], svg[role]").length,
+      ariaGraphCount: document.querySelectorAll("svg[aria-label], svg[role]")
+        .length,
       graphAreaHeight: roundValue(graphAreaHeight, 1),
       graphAreaWidth: roundValue(graphAreaWidth, 1),
       scrollWidth: document.documentElement.scrollWidth,
@@ -513,13 +519,17 @@ async function collectTooltipState(page) {
     };
 
     const tooltipCandidates = Array.from(
-      document.querySelectorAll('[class*="tooltip" i], [role="tooltip"]')
+      document.querySelectorAll('[class*="tooltip" i], [role="tooltip"]'),
     )
       .filter(isVisible)
       .map((element) => {
         const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
-        const blockChildren = element.querySelectorAll("div, p, li, dt, dd, strong, span").length;
-        const lineBreakCount = text.split(/(?:\s{2,}|\u00b7|\||,)/).filter(Boolean).length;
+        const blockChildren = element.querySelectorAll(
+          "div, p, li, dt, dd, strong, span",
+        ).length;
+        const lineBreakCount = text
+          .split(/(?:\s{2,}|\u00b7|\||,)/)
+          .filter(Boolean).length;
         return {
           text,
           textLength: text.length,
@@ -528,7 +538,10 @@ async function collectTooltipState(page) {
       })
       .filter((tooltip) => tooltip.textLength > 0);
 
-    const strongest = tooltipCandidates.sort((left, right) => right.textLength - left.textLength)[0] ?? null;
+    const strongest =
+      tooltipCandidates.sort(
+        (left, right) => right.textLength - left.textLength,
+      )[0] ?? null;
     return {
       visible: Boolean(strongest),
       count: tooltipCandidates.length,
@@ -560,24 +573,24 @@ async function collectStyleSnapshot(page) {
     const roundValue = (value, digits = 3) => Number(value.toFixed(digits));
 
     const project = (elements) =>
-      elements
-        .filter(isVisible)
-        .map((element, domIndex) => {
-          const style = getComputedStyle(element);
-          return {
-            domIndex,
-            opacity: roundValue(Number.parseFloat(style.opacity || "1")),
-            fill: style.fill,
-            stroke: style.stroke,
-            strokeWidth: roundValue(Number.parseFloat(style.strokeWidth || "0")),
-            className: element.getAttribute("class") || "",
-            filter: style.filter || "",
-          };
-        });
+      elements.filter(isVisible).map((element, domIndex) => {
+        const style = getComputedStyle(element);
+        return {
+          domIndex,
+          opacity: roundValue(Number.parseFloat(style.opacity || "1")),
+          fill: style.fill,
+          stroke: style.stroke,
+          strokeWidth: roundValue(Number.parseFloat(style.strokeWidth || "0")),
+          className: element.getAttribute("class") || "",
+          filter: style.filter || "",
+        };
+      });
 
     return {
       nodes: project(Array.from(document.querySelectorAll("svg circle"))),
-      links: project(Array.from(document.querySelectorAll("svg line, svg path"))),
+      links: project(
+        Array.from(document.querySelectorAll("svg line, svg path")),
+      ),
     };
   });
 }
@@ -686,31 +699,38 @@ async function probeHighlight(page, nodeIndex) {
     };
   }
 
-  await page.mouse.click(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+  await page.mouse.click(
+    targetBox.x + targetBox.width / 2,
+    targetBox.y + targetBox.height / 2,
+  );
   await page.waitForTimeout(450);
 
   const after = await collectStyleSnapshot(page);
   const nodeDiff = countStyleDifferences(before.nodes, after.nodes);
   const linkDiff = countStyleDifferences(before.links, after.links);
 
-  const targetBefore = before.nodes.find((entry) => entry.domIndex === nodeIndex);
+  const targetBefore = before.nodes.find(
+    (entry) => entry.domIndex === nodeIndex,
+  );
   const targetAfter = after.nodes.find((entry) => entry.domIndex === nodeIndex);
 
   const targetChanged = Boolean(
     targetBefore &&
-      targetAfter &&
-      (targetBefore.opacity !== targetAfter.opacity ||
-        targetBefore.fill !== targetAfter.fill ||
-        targetBefore.stroke !== targetAfter.stroke ||
-        targetBefore.strokeWidth !== targetAfter.strokeWidth ||
-        targetBefore.className !== targetAfter.className ||
-        targetBefore.filter !== targetAfter.filter)
+    targetAfter &&
+    (targetBefore.opacity !== targetAfter.opacity ||
+      targetBefore.fill !== targetAfter.fill ||
+      targetBefore.stroke !== targetAfter.stroke ||
+      targetBefore.strokeWidth !== targetAfter.strokeWidth ||
+      targetBefore.className !== targetAfter.className ||
+      targetBefore.filter !== targetAfter.filter),
   );
 
   const dimmedNodes = after.nodes.filter(
-    (entry) => entry.opacity <= 0.45 || /dim/i.test(entry.className)
+    (entry) => entry.opacity <= 0.45 || /dim/i.test(entry.className),
   ).length;
-  const highlightedClassCount = after.nodes.filter((entry) => /highlight|selected|active/i.test(entry.className)).length;
+  const highlightedClassCount = after.nodes.filter((entry) =>
+    /highlight|selected|active/i.test(entry.className),
+  ).length;
 
   return {
     targetChanged,
@@ -791,7 +811,9 @@ async function collectZoomProbe(page) {
     return {
       transform: candidate?.transform ?? "",
       scale: candidate?.scale ?? 1,
-      signature: candidate ? `${candidate.domIndex}:${candidate.className}` : "",
+      signature: candidate
+        ? `${candidate.domIndex}:${candidate.className}`
+        : "",
       viewBox: svg?.getAttribute("viewBox") || "",
     };
   });
@@ -813,13 +835,19 @@ async function probeZoom(page) {
 
   const before = await collectZoomProbe(page);
 
-  await page.mouse.move(svgBox.x + svgBox.width / 2, svgBox.y + svgBox.height / 2);
+  await page.mouse.move(
+    svgBox.x + svgBox.width / 2,
+    svgBox.y + svgBox.height / 2,
+  );
   await page.mouse.wheel(0, -900);
   await page.waitForTimeout(350);
 
   let after = await collectZoomProbe(page);
 
-  if (before.transform === after.transform && before.viewBox === after.viewBox) {
+  if (
+    before.transform === after.transform &&
+    before.viewBox === after.viewBox
+  ) {
     await page.mouse.wheel(0, 900);
     await page.waitForTimeout(350);
     after = await collectZoomProbe(page);
@@ -872,190 +900,15 @@ async function screenshotTheme(page) {
   };
 }
 
-function scoreLoadStability(renderReady, pageErrorCount) {
-  if (!renderReady) {
-    return 0;
-  }
-
-  if (pageErrorCount > 0) {
-    return 6;
-  }
-
-  return 10;
-}
-
-function scoreGraphData(nodeCount, linkCount) {
-  let score = 0;
-
-  if (nodeCount >= 98 && nodeCount <= 102) {
-    score += 12;
-  } else if (nodeCount >= 90 && nodeCount <= 110) {
-    score += 10;
-  } else if (nodeCount >= 80 && nodeCount <= 120) {
-    score += 6;
-  }
-
-  if (linkCount >= 90) {
-    score += 6;
-  } else if (linkCount >= 60) {
-    score += 4;
-  } else if (linkCount >= 30) {
-    score += 2;
-  }
-
-  return score;
-}
-
-function scoreTooltip(metrics) {
-  if (!metrics.visible) {
-    return 0;
-  }
-
-  let score = 8;
-
-  if (metrics.textLength >= 40) {
-    score += 5;
-  } else if (metrics.textLength >= 20) {
-    score += 4;
-  } else if (metrics.textLength >= 10) {
-    score += 2;
-  }
-
-  if (metrics.richness >= 4) {
-    score += 3;
-  } else if (metrics.richness >= 2) {
-    score += 2;
-  } else if (metrics.richness >= 1) {
-    score += 1;
-  }
-
-  return clamp(score, 0, 16);
-}
-
-function scoreHighlight(metrics) {
-  let score = 0;
-
-  if (metrics.targetChanged || metrics.nodeStyleChanges >= 3) {
-    score += 6;
-  } else if (metrics.nodeStyleChanges >= 1) {
-    score += 3;
-  }
-
-  if (
-    metrics.dimmedNodes >= 1 ||
-    metrics.nodeOpacityShiftCount >= 3 ||
-    metrics.nodeFillShiftCount >= 3 ||
-    metrics.highlightedClassCount >= 2
-  ) {
-    score += 10;
-  } else if (metrics.nodeStyleChanges >= 2) {
-    score += 5;
-  }
-
-  if (metrics.linkStyleChanges >= 1 || metrics.linkOpacityShiftCount >= 1) {
-    score += 4;
-  }
-
-  return clamp(score, 0, 20);
-}
-
-function scoreZoom(metrics) {
-  if (!metrics.changed) {
-    return 0;
-  }
-
-  const scaleDelta = Math.abs(metrics.afterScale - metrics.beforeScale);
-  if (scaleDelta >= 0.1) {
-    return 12;
-  }
-
-  if (metrics.beforeTransform !== metrics.afterTransform) {
-    return 10;
-  }
-
-  return 8;
-}
-
-function scoreInfoArchitecture(metrics) {
-  let score = 0;
-
-  if (metrics.headingCount >= 1) {
-    score += 3;
-  }
-
-  if (metrics.descriptiveBlockCount >= 3) {
-    score += 3;
-  } else if (metrics.descriptiveBlockCount >= 1) {
-    score += 2;
-  }
-
-  if (metrics.infoContainerCount >= 4 || metrics.statsBlockCount >= 3) {
-    score += 2;
-  } else if (metrics.infoContainerCount >= 2 || metrics.statsBlockCount >= 1) {
-    score += 1;
-  }
-
-  if (metrics.controlCount >= 2) {
-    score += 1;
-  } else if (metrics.controlCount >= 1) {
-    score += 0.5;
-  }
-
-  if (metrics.viewportMeta) {
-    score += 0.5;
-  }
-
-  if (metrics.ariaGraphCount >= 1) {
-    score += 1;
-  }
-
-  return clamp(round(score, 1), 0, 10);
-}
-
-function scoreDarkTheme(themeLuminance, textColorValue) {
-  const textLuminance = luminance(parseColorString(textColorValue));
-
-  if (themeLuminance <= 90 && textLuminance >= 170) {
-    return 6;
-  }
-
-  if (themeLuminance <= 120 && textLuminance >= 145) {
-    return 4;
-  }
-
-  if (themeLuminance <= 145) {
-    return 2;
-  }
-
-  return 0;
-}
-
-function scoreResponsive(metrics) {
-  let score = 0;
-  const overflow = metrics.scrollWidth - metrics.viewportWidth;
-
-  if (overflow <= 12) {
-    score += 4;
-  } else if (overflow <= 24) {
-    score += 3;
-  } else if (overflow <= 48) {
-    score += 1;
-  }
-
-  if (metrics.graphAreaHeight >= 240 && metrics.nodeCount >= 80) {
-    score += 4;
-  } else if (metrics.graphAreaHeight >= 180 && metrics.nodeCount >= 60) {
-    score += 2;
-  }
-
-  return clamp(score, 0, 8);
-}
-
 function createNotes(context) {
   const notes = [];
 
   if (context.pageErrors.length) {
     notes.push(`运行期错误 ${context.pageErrors.length} 个`);
+  }
+
+  if (context.consoleErrors.length) {
+    notes.push(`控制台错误 ${context.consoleErrors.length} 个`);
   }
 
   if (context.desktop.nodeCount !== 100) {
@@ -1068,9 +921,12 @@ function createNotes(context) {
     notes.push("未检测到可见 Tooltip");
   }
 
-  if (context.highlight.nodeStyleChanges || context.highlight.linkStyleChanges) {
+  if (
+    context.highlight.nodeStyleChanges ||
+    context.highlight.linkStyleChanges
+  ) {
     notes.push(
-      `点击后节点变化 ${context.highlight.nodeStyleChanges}，边变化 ${context.highlight.linkStyleChanges}`
+      `点击后节点变化 ${context.highlight.nodeStyleChanges}，边变化 ${context.highlight.linkStyleChanges}`,
     );
   } else {
     notes.push("点击后未观察到足够明显的邻接高亮变化");
@@ -1078,7 +934,7 @@ function createNotes(context) {
 
   if (context.zoom.changed) {
     notes.push(
-      `缩放比例 ${round(context.zoom.beforeScale, 2)} -> ${round(context.zoom.afterScale, 2)}`
+      `缩放比例 ${round(context.zoom.beforeScale, 2)} -> ${round(context.zoom.afterScale, 2)}`,
     );
   } else {
     notes.push("滚轮未检测到缩放容器变化");
@@ -1099,23 +955,27 @@ async function evaluateModel(browser, serverBaseUrl, model) {
     },
     deviceScaleFactor: 1,
   });
+  await page.emulateMedia({ reducedMotion: "reduce" });
 
   const seed = hashSeed(`coding-model-comparison:${model.file}:v1`);
-  await page.addInitScript(({ value }) => {
-    let state = value >>> 0;
-    const seededRandom = () => {
-      state = (state + 0x6d2b79f5) >>> 0;
-      let next = Math.imul(state ^ (state >>> 15), 1 | state);
-      next ^= next + Math.imul(next ^ (next >>> 7), 61 | next);
-      return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
-    };
+  await page.addInitScript(
+    ({ value }) => {
+      let state = value >>> 0;
+      const seededRandom = () => {
+        state = (state + 0x6d2b79f5) >>> 0;
+        let next = Math.imul(state ^ (state >>> 15), 1 | state);
+        next ^= next + Math.imul(next ^ (next >>> 7), 61 | next);
+        return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+      };
 
-    Object.defineProperty(Math, "random", {
-      configurable: true,
-      value: seededRandom,
-      writable: false,
-    });
-  }, { value: seed });
+      Object.defineProperty(Math, "random", {
+        configurable: true,
+        value: seededRandom,
+        writable: false,
+      });
+    },
+    { value: seed },
+  );
 
   const pageErrors = [];
   const consoleErrors = [];
@@ -1129,15 +989,20 @@ async function evaluateModel(browser, serverBaseUrl, model) {
 
   const url = `${serverBaseUrl}/${model.file}`;
   await page.goto(url, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
+  await page
+    .waitForLoadState("networkidle", { timeout: 10_000 })
+    .catch(() => {});
   await page.waitForTimeout(1_500);
 
   const desktop = await waitForGraph(page);
-  const renderReady = Boolean(desktop && desktop.nodeCount >= 50 && desktop.svgCount >= 1);
+  const renderReady = Boolean(
+    desktop && desktop.nodeCount >= 50 && desktop.svgCount >= 1,
+  );
   const tooltip = renderReady
     ? await probeTooltip(page, desktop.targetCircleDomIndex)
     : {
         visible: false,
+        count: 0,
         textLength: 0,
         richness: 0,
         sample: "",
@@ -1154,48 +1019,36 @@ async function evaluateModel(browser, serverBaseUrl, model) {
         dimmedNodes: 0,
         highlightedClassCount: 0,
       };
-  const zoom = renderReady ? await probeZoom(page) : { changed: false, beforeScale: 1, afterScale: 1 };
+  const zoom = renderReady
+    ? await probeZoom(page)
+    : { changed: false, beforeScale: 1, afterScale: 1 };
   const theme = await screenshotTheme(page);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => {});
+  await page
+    .waitForLoadState("networkidle", { timeout: 10_000 })
+    .catch(() => {});
   await page.waitForTimeout(1_500);
   const mobile = await waitForGraph(page);
 
   await page.close();
 
-  const scores = {
-    loadStability: scoreLoadStability(renderReady, pageErrors.length),
-    graphData: scoreGraphData(desktop?.nodeCount ?? 0, desktop?.linkCount ?? 0),
-    tooltip: scoreTooltip(tooltip),
-    highlight: scoreHighlight(highlight),
-    zoom: scoreZoom(zoom),
-    infoArchitecture: scoreInfoArchitecture(desktop ?? {
-      headingCount: 0,
-      descriptiveBlockCount: 0,
-      infoContainerCount: 0,
-      statsBlockCount: 0,
-      controlCount: 0,
-      viewportMeta: false,
-      ariaGraphCount: 0,
-    }),
-    darkTheme: scoreDarkTheme(theme.luminance, desktop?.rootTextColor ?? "rgb(255, 255, 255)"),
-    responsive: scoreResponsive(mobile ?? {
-      scrollWidth: 9999,
-      viewportWidth: 390,
-      graphAreaHeight: 0,
-      nodeCount: 0,
-    }),
-  };
-
-  const totalScore = round(
-    Object.values(scores).reduce((sum, value) => sum + Number(value), 0),
-    1
-  );
+  const scorecard = buildScorecard({
+    renderReady,
+    pageErrors,
+    consoleErrors,
+    desktop,
+    tooltip,
+    highlight,
+    zoom,
+    mobile,
+    theme,
+  });
 
   const context = {
     pageErrors,
+    consoleErrors,
     desktop,
     tooltip,
     highlight,
@@ -1205,8 +1058,9 @@ async function evaluateModel(browser, serverBaseUrl, model) {
 
   return {
     ...model,
-    totalScore,
-    scores,
+    totalScore: scorecard.totalScore,
+    scores: scorecard.scores,
+    scoreBreakdown: scorecard.breakdown,
     metrics: {
       desktop,
       mobile,
@@ -1236,7 +1090,15 @@ function scoreClass(score, total) {
   return "low";
 }
 
+function buildScoreTitle(result, rubricItem) {
+  const items = result.scoreBreakdown?.[rubricItem.key]?.items ?? [];
+  return items
+    .map((item) => `${item.label}: ${item.score}/${item.maxPoints}`)
+    .join("\n");
+}
+
 function buildIndexHtml(results, generatedAt) {
+  const rubricTotalPoints = getRubricTotalPoints();
   const sorted = [...results].sort((left, right) => {
     if (right.totalScore !== left.totalScore) {
       return right.totalScore - left.totalScore;
@@ -1244,37 +1106,43 @@ function buildIndexHtml(results, generatedAt) {
     return left.durationSeconds - right.durationSeconds;
   });
 
-  const ranked = sorted.map((result, index) => ({ ...result, rank: index + 1 }));
+  const ranked = sorted.map((result, index) => ({
+    ...result,
+    rank: index + 1,
+  }));
   const winner = ranked[0];
-  const fastest = [...ranked].sort((left, right) => left.durationSeconds - right.durationSeconds)[0];
+  const fastest = [...ranked].sort(
+    (left, right) => left.durationSeconds - right.durationSeconds,
+  )[0];
   const averageScore = round(
-    ranked.reduce((sum, result) => sum + result.totalScore, 0) / Math.max(ranked.length, 1),
-    1
+    ranked.reduce((sum, result) => sum + result.totalScore, 0) /
+      Math.max(ranked.length, 1),
+    1,
   );
-  const strongestInteraction = [...ranked]
-    .sort(
-      (left, right) =>
-        right.scores.tooltip +
-        right.scores.highlight +
-        right.scores.zoom -
-        (left.scores.tooltip + left.scores.highlight + left.scores.zoom)
-    )[0];
+  const strongestInteraction = [...ranked].sort(
+    (left, right) =>
+      right.scores.tooltip +
+      right.scores.highlight +
+      right.scores.zoom -
+      (left.scores.tooltip + left.scores.highlight + left.scores.zoom),
+  )[0];
 
   const tableRows = ranked
     .map((result) => {
       const scoreCells = RUBRIC.map((item) => {
         const value = result.scores[item.key];
-        return `<td><span class="score-pill ${scoreClass(value, item.points)}">${value}/${item.points}</span></td>`;
+        const title = escapeHtml(buildScoreTitle(result, item)).replaceAll(
+          "\n",
+          "&#10;",
+        );
+        return `<td title="${title}"><span class="score-pill ${scoreClass(value, item.points)}">${value}/${item.points}</span></td>`;
       }).join("");
-
-      const baselineTag = result.baseline ? `<span class="baseline-tag">基准页</span>` : "";
 
       return `
         <tr class="${result.baseline ? "is-baseline" : ""}">
           <td>${result.rank}</td>
           <td class="model-cell">
             <span class="model-name">${escapeHtml(result.name)}</span>
-            ${baselineTag}
           </td>
           <td><span class="total-score">${result.totalScore}</span></td>
           <td>${escapeHtml(result.runner)}</td>
@@ -1295,47 +1163,20 @@ function buildIndexHtml(results, generatedAt) {
       <tr>
         <td>${escapeHtml(item.label)}</td>
         <td>${item.points}</td>
-        <td>${escapeHtml(item.detail)}</td>
+        <td>
+          <div class="rubric-detail">${escapeHtml(item.detail)}</div>
+          <ul class="rubric-subitems">
+            ${item.subItems
+              .map(
+                (subItem) =>
+                  `<li><strong>${escapeHtml(subItem.label)}</strong><span>${subItem.points} 分</span><span>${escapeHtml(subItem.detail)}</span></li>`,
+              )
+              .join("")}
+          </ul>
+        </td>
       </tr>
-    `
+    `,
   ).join("");
-
-  const notePanels = ranked
-    .map((result) => {
-      const noteItems = result.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
-      const consoleItem = result.metrics.consoleErrors.length
-        ? `<p class="small">控制台错误：${escapeHtml(result.metrics.consoleErrors.join(" | "))}</p>`
-        : "";
-      const pageErrorItem = result.metrics.pageErrors.length
-        ? `<p class="small">页面错误：${escapeHtml(result.metrics.pageErrors.join(" | "))}</p>`
-        : "";
-
-      return `
-        <details class="detail-card" ${result.baseline ? "open" : ""}>
-          <summary>
-            <span>${escapeHtml(result.name)}</span>
-            <span>${result.totalScore} 分</span>
-          </summary>
-          <div class="detail-grid">
-            <div>
-              <h3>自动化观察</h3>
-              <ul>${noteItems}</ul>
-            </div>
-            <div>
-              <h3>原始指标</h3>
-              <p>桌面端：${result.metrics.desktop.nodeCount} 节点 / ${result.metrics.desktop.linkCount} 边</p>
-              <p>Tooltip：可见 ${result.metrics.tooltip.visible ? "是" : "否"}，文本长度 ${result.metrics.tooltip.textLength}</p>
-              <p>缩放：${result.metrics.zoom.changed ? "检测到" : "未检测到"}，亮度 ${result.metrics.theme.luminance}</p>
-              <p>移动端：宽度 ${result.metrics.mobile.viewportWidth}px，scrollWidth ${result.metrics.mobile.scrollWidth}px</p>
-              <p>文本色：${escapeHtml(result.metrics.rootTextColor)}，截图均值：${escapeHtml(result.metrics.theme.averageRgb)}</p>
-              ${consoleItem}
-              ${pageErrorItem}
-            </div>
-          </div>
-        </details>
-      `;
-    })
-    .join("");
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -1390,8 +1231,7 @@ function buildIndexHtml(results, generatedAt) {
 
       .hero,
       .panel,
-      .card,
-      .detail-card {
+      .card {
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 20px;
@@ -1608,42 +1448,31 @@ function buildIndexHtml(results, generatedAt) {
           monospace;
       }
 
-      .detail-card {
-        margin-top: 12px;
-        overflow: hidden;
+      .rubric-detail {
+        color: var(--text);
       }
 
-      .detail-card summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        cursor: pointer;
-        padding: 18px 20px;
-        font-weight: 800;
-      }
-
-      .detail-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 16px;
-        padding: 0 20px 18px;
-      }
-
-      ul {
+      .rubric-subitems {
         margin: 10px 0 0;
-        padding-left: 1.2rem;
+        padding-left: 18px;
+        color: var(--muted);
       }
 
-      li {
-        color: var(--muted);
-        line-height: 1.65;
+      .rubric-subitems li {
+        margin-bottom: 8px;
+        line-height: 1.6;
       }
 
-      .small {
-        margin-top: 8px;
-        color: var(--muted);
-        font-size: 0.84rem;
+      .rubric-subitems li:last-child {
+        margin-bottom: 0;
+      }
+
+      .rubric-subitems strong {
+        color: var(--text);
+      }
+
+      .rubric-subitems span {
+        margin-left: 8px;
       }
 
       @media (max-width: 780px) {
@@ -1654,9 +1483,7 @@ function buildIndexHtml(results, generatedAt) {
 
         .hero,
         .panel,
-        .card,
-        .detail-card summary,
-        .detail-grid {
+        .card {
           padding-left: 14px;
           padding-right: 14px;
         }
@@ -1668,8 +1495,7 @@ function buildIndexHtml(results, generatedAt) {
       <section class="hero">
         <div class="eyebrow">Automated Benchmark</div>
         <h1>模型编程性能测试汇总</h1>
-        <p class="sub">基准页：<strong>GPT 5.4</strong>。自动化评测于 ${escapeHtml(generatedAt)} 使用 Playwright Core + Google Chrome Headless 执行，桌面端视口为 1440×900，移动端视口为 390×844。</p>
-        <p class="sub">评分改为 100 分制，按渲染稳定性、图数据完整度、Tooltip、邻接高亮、缩放、信息架构、暗色主题、移动端适配八个维度细化。原始结果 JSON：<a class="link" href="reports/evaluation-results.json" target="_blank" rel="noopener noreferrer">reports/evaluation-results.json</a></p>
+        <p class="sub">自动化评测于 ${escapeHtml(generatedAt)} 使用 Playwright Core + Google Chrome Headless 执行，桌面端视口为 1440×900，移动端视口为 390×844。</p>
         <p class="sub">GitHub：<a class="link" href="https://github.com/versun/coding-model-comparison" target="_blank" rel="noopener noreferrer">https://github.com/versun/coding-model-comparison</a></p>
       </section>
 
@@ -1677,7 +1503,6 @@ function buildIndexHtml(results, generatedAt) {
         <article class="card">
           <div class="card-label">参与模型数</div>
           <div class="card-value">${ranked.length}</div>
-          <div class="card-meta">所有单文件 HTML 页面均重新跑过一遍自动化评测。</div>
         </article>
         <article class="card">
           <div class="card-label">最高总分</div>
@@ -1702,24 +1527,6 @@ function buildIndexHtml(results, generatedAt) {
           <summary>展开查看原始 Prompt</summary>
           <pre class="prompt-content">${escapeHtml(TEST_PROMPT)}</pre>
         </details>
-      </section>
-
-      <section class="panel">
-        <h2>评分细则</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>维度</th>
-                <th>分值</th>
-                <th>自动化检测方式</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rubricRows}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section class="panel">
@@ -1754,8 +1561,21 @@ function buildIndexHtml(results, generatedAt) {
       </section>
 
       <section class="panel">
-        <h2>逐模型备注</h2>
-        ${notePanels}
+        <h2>评分细则</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th>分值</th>
+                <th>自动化检测方式</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rubricRows}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   </body>
@@ -1786,7 +1606,10 @@ async function main() {
       return left.durationSeconds - right.durationSeconds;
     });
 
-    const withRanks = sorted.map((result, index) => ({ ...result, rank: index + 1 }));
+    const withRanks = sorted.map((result, index) => ({
+      ...result,
+      rank: index + 1,
+    }));
     const generatedAt = formatTimestamp(new Date());
     const payload = {
       generatedAt,
@@ -1796,12 +1619,20 @@ async function main() {
       models: withRanks,
     };
 
-    await fs.writeFile(RESULTS_PATH, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-    await fs.writeFile(INDEX_PATH, buildIndexHtml(withRanks, generatedAt), "utf8");
+    await fs.writeFile(
+      RESULTS_PATH,
+      `${JSON.stringify(payload, null, 2)}\n`,
+      "utf8",
+    );
+    await fs.writeFile(
+      INDEX_PATH,
+      buildIndexHtml(withRanks, generatedAt),
+      "utf8",
+    );
 
     for (const result of withRanks) {
       console.log(
-        `${String(result.rank).padStart(2, "0")}. ${result.name.padEnd(14)} ${String(result.totalScore).padStart(5, " ")}`
+        `${String(result.rank).padStart(2, "0")}. ${result.name.padEnd(14)} ${String(result.totalScore).padStart(5, " ")}`,
       );
     }
   } finally {

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Force-Directed Graph</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/d3@7"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+    #root { width: 100%; height: 100%; }
+    .graph-container { width: 100%; height: 100%; position: relative; }
+    svg { display: block; }
+    .node {
+      cursor: pointer;
+      transition: r 0.2s ease;
+    }
+    .node circle {
+      fill: #58a6ff;
+      stroke: #1f6feb;
+      stroke-width: 2px;
+      transition: all 0.2s ease;
+    }
+    .node:hover circle {
+      fill: #79c0ff;
+      stroke: #58a6ff;
+    }
+    .node.highlighted circle {
+      fill: #f0883e;
+      stroke: #d29922;
+      stroke-width: 3px;
+    }
+    .node.dimmed circle {
+      fill: #484f58;
+      stroke: #30363d;
+    }
+    .link {
+      stroke: #30363d;
+      stroke-opacity: 0.6;
+      transition: all 0.2s ease;
+    }
+    .link.highlighted {
+      stroke: #58a6ff;
+      stroke-opacity: 1;
+      stroke-width: 2px;
+    }
+    .link.dimmed {
+      stroke: #21262d;
+      stroke-opacity: 0.2;
+    }
+    .tooltip {
+      position: fixed;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #e6edf3;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+    .tooltip.visible { opacity: 1; }
+    .tooltip-title { font-weight: 600; margin-bottom: 4px; color: #58a6ff; }
+    .tooltip-info { color: #8b949e; }
+    .controls {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #8b949e;
+    }
+    .controls h3 {
+      color: #e6edf3;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .controls p { margin: 4px 0; }
+    .controls kbd {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    function ForceGraph() {
+      const svgRef = useRef(null);
+      const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, data: null });
+      const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+      useEffect(() => {
+        const handleResize = () => setDimensions({ width: window.innerWidth, height: window.innerHeight });
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+      }, []);
+
+      const generateData = useCallback(() => {
+        const nodes = Array.from({ length: 100 }, (_, i) => ({
+          id: i,
+          group: Math.floor(Math.random() * 5) + 1,
+          connections: Math.floor(Math.random() * 4) + 1
+        }));
+
+        const links = [];
+        const linkSet = new Set();
+
+        for (let i = 0; i < nodes.length; i++) {
+          const connectionCount = nodes[i].connections;
+          let added = 0;
+
+          while (added < connectionCount) {
+            const target = Math.floor(Math.random() * nodes.length);
+            if (target !== i) {
+              const key = `${Math.min(i, target)}-${Math.max(i, target)}`;
+              if (!linkSet.has(key)) {
+                linkSet.add(key);
+                links.push({ source: i, target });
+                added++;
+              }
+            }
+          }
+        }
+
+        return { nodes, links };
+      }, []);
+
+      useEffect(() => {
+        if (!svgRef.current) return;
+
+        const svg = d3.select(svgRef.current);
+        svg.selectAll('*').remove();
+
+        const { nodes, links } = generateData();
+
+        const zoom = d3.zoom()
+          .scaleExtent([0.3, 3])
+          .on('zoom', (event) => {
+            container.attr('transform', event.transform);
+          });
+
+        svg.call(zoom);
+
+        const container = svg.append('g');
+
+        const simulation = d3.forceSimulation(nodes)
+          .force('link', d3.forceLink(links).id(d => d.id).distance(80))
+          .force('charge', d3.forceManyBody().strength(-200))
+          .force('center', d3.forceCenter(dimensions.width / 2, dimensions.height / 2))
+          .force('collision', d3.forceCollide().radius(20));
+
+        const link = container.append('g')
+          .selectAll('line')
+          .data(links)
+          .join('line')
+          .attr('class', 'link')
+          .attr('stroke-width', 1);
+
+        const node = container.append('g')
+          .selectAll('g')
+          .data(nodes)
+          .join('g')
+          .attr('class', 'node')
+          .call(d3.drag()
+            .on('start', (event, d) => {
+              if (!event.active) simulation.alphaTarget(0.3).restart();
+              d.fx = d.x;
+              d.fy = d.y;
+            })
+            .on('drag', (event, d) => {
+              d.fx = event.x;
+              d.fy = event.y;
+            })
+            .on('end', (event, d) => {
+              if (!event.active) simulation.alphaTarget(0);
+              d.fx = null;
+              d.fy = null;
+            }));
+
+        node.append('circle')
+          .attr('r', 8);
+
+        const getNeighbors = (nodeId) => {
+          const neighbors = new Set([nodeId]);
+          links.forEach(l => {
+            if (l.source.id === nodeId) neighbors.add(l.target.id);
+            if (l.target.id === nodeId) neighbors.add(l.source.id);
+          });
+          return neighbors;
+        };
+
+        const highlightNode = (clickedNode) => {
+          const neighbors = getNeighbors(clickedNode.id);
+
+          node.attr('class', d => {
+            if (neighbors.has(d.id)) {
+              return d.id === clickedNode.id ? 'node highlighted' : 'node highlighted';
+            }
+            return 'node dimmed';
+          });
+
+          link.attr('class', l => {
+            if (l.source.id === clickedNode.id || l.target.id === clickedNode.id) {
+              return 'link highlighted';
+            }
+            return 'link dimmed';
+          });
+        };
+
+        const resetHighlight = () => {
+          node.attr('class', 'node');
+          link.attr('class', 'link');
+        };
+
+        node.on('click', (event, d) => {
+          event.stopPropagation();
+          if (d3.select(event.currentTarget).attr('class').includes('dimmed')) {
+            highlightNode(d);
+          } else {
+            resetHighlight();
+          }
+        });
+
+        svg.on('click', resetHighlight);
+
+        node.on('mouseenter', (event, d) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          setTooltip({
+            visible: true,
+            x: rect.left + rect.width / 2,
+            y: rect.top - 10,
+            data: {
+              id: d.id,
+              group: d.group,
+              connections: d.connections
+            }
+          });
+        });
+
+        node.on('mouseleave', () => {
+          setTooltip(t => ({ ...t, visible: false }));
+        });
+
+        simulation.on('tick', () => {
+          link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+          node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+
+        return () => simulation.stop();
+      }, [dimensions, generateData]);
+
+      return (
+        <div className="graph-container">
+          <svg ref={svgRef} width={dimensions.width} height={dimensions.height} />
+          <div
+            className={`tooltip ${tooltip.visible ? 'visible' : ''}`}
+            style={{ left: tooltip.x, top: tooltip.y, transform: 'translate(-50%, -100%)' }}
+          >
+            {tooltip.data && (
+              <>
+                <div className="tooltip-title">节点 #{tooltip.data.id}</div>
+                <div className="tooltip-info">
+                  分组: {tooltip.data.group} | 连接数: {tooltip.data.connections}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="controls">
+            <h3>操作说明</h3>
+            <p><kbd>悬停</kbd> 显示节点信息</p>
+            <p><kbd>点击</kbd> 高亮相邻节点</p>
+            <p><kbd>滚轮</kbd> 缩放画布</p>
+            <p><kbd>拖拽</kbd> 移动节点</p>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<ForceGraph />);
+  </script>
+</body>
+</html>

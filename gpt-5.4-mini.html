@@ -1,0 +1,1329 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>随机力导向图 · Mini</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #05070a;
+        --bg-2: #080b10;
+        --panel: rgba(12, 16, 23, 0.78);
+        --panel-strong: rgba(14, 19, 27, 0.9);
+        --line: rgba(255, 255, 255, 0.08);
+        --line-strong: rgba(255, 255, 255, 0.14);
+        --text: #edf2f7;
+        --muted: rgba(237, 242, 247, 0.68);
+        --faint: rgba(237, 242, 247, 0.44);
+        --accent: #76e4f7;
+        --accent-2: #7ee2b8;
+        --accent-3: #f4c97a;
+        --shadow: 0 24px 72px rgba(0, 0, 0, 0.42);
+        --shadow-soft: 0 10px 34px rgba(0, 0, 0, 0.26);
+        --grid: rgba(255, 255, 255, 0.04);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #root {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family:
+          "Space Grotesk",
+          "Noto Sans SC",
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Microsoft YaHei",
+          sans-serif;
+        background:
+          radial-gradient(circle at 15% 10%, rgba(118, 228, 247, 0.12), transparent 24rem),
+          radial-gradient(circle at 82% 12%, rgba(126, 226, 184, 0.09), transparent 22rem),
+          radial-gradient(circle at 50% 100%, rgba(244, 201, 122, 0.07), transparent 28rem),
+          linear-gradient(180deg, #07090d 0%, #040509 100%);
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(var(--grid) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: radial-gradient(circle at center, black 34%, transparent 76%);
+        opacity: 0.38;
+      }
+
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+      }
+
+      button {
+        appearance: none;
+        border: 0;
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(1440px, calc(100vw - 28px));
+        margin: 0 auto;
+        padding: 22px 0 28px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+
+      .hero-copy {
+        display: grid;
+        gap: 12px;
+        max-width: 760px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        box-shadow: 0 0 16px rgba(118, 228, 247, 0.6);
+      }
+
+      .hero h1 {
+        margin: 0;
+        font-size: clamp(2.3rem, 5vw, 4.9rem);
+        line-height: 0.93;
+        letter-spacing: -0.06em;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 62ch;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.7;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .ghost-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 11px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        cursor: pointer;
+        transition:
+          transform 160ms ease,
+          background 160ms ease,
+          border-color 160ms ease;
+      }
+
+      .ghost-button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(118, 228, 247, 0.28);
+        background: rgba(118, 228, 247, 0.08);
+      }
+
+      .ghost-button:focus-visible {
+        outline: 2px solid rgba(118, 228, 247, 0.45);
+        outline-offset: 2px;
+      }
+
+      .ghost-button.primary {
+        border-color: rgba(126, 226, 184, 0.24);
+        background: linear-gradient(180deg, rgba(126, 226, 184, 0.16), rgba(255, 255, 255, 0.04));
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .stat-card,
+      .section {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .stat-card {
+        padding: 15px 16px 14px;
+      }
+
+      .stat-label {
+        display: block;
+        color: var(--faint);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .stat-value {
+        display: block;
+        margin-top: 8px;
+        font-size: 1.45rem;
+        font-weight: 700;
+        letter-spacing: -0.05em;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .stat-note {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.72fr) minmax(300px, 0.72fr);
+        gap: 14px;
+        align-items: stretch;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+          var(--panel-strong);
+        backdrop-filter: blur(18px);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .graph-panel {
+        position: relative;
+        display: flex;
+        min-height: clamp(560px, 70vh, 820px);
+        padding: 14px;
+      }
+
+      .graph-shell {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        border-radius: 20px;
+        background:
+          radial-gradient(circle at 50% 28%, rgba(118, 228, 247, 0.09), transparent 26rem),
+          radial-gradient(circle at 78% 24%, rgba(126, 226, 184, 0.06), transparent 20rem),
+          linear-gradient(180deg, rgba(8, 11, 16, 0.98), rgba(4, 5, 8, 0.98));
+      }
+
+      .graph-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(transparent 96%, rgba(255, 255, 255, 0.02) 100%),
+          linear-gradient(90deg, transparent 96%, rgba(255, 255, 255, 0.02) 100%);
+        background-size: 48px 48px;
+        opacity: 0.18;
+      }
+
+      .graph-meta {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(5, 7, 10, 0.72);
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        pointer-events: none;
+      }
+
+      .graph-meta::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        box-shadow: 0 0 18px rgba(118, 228, 247, 0.65);
+      }
+
+      .graph-footer {
+        position: absolute;
+        left: 14px;
+        bottom: 14px;
+        z-index: 3;
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(5, 7, 10, 0.68);
+        color: var(--faint);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.03em;
+        pointer-events: none;
+      }
+
+      .graph-footer b {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      svg.graph {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+      }
+
+      svg.graph:active {
+        cursor: grabbing;
+      }
+
+      .tooltip {
+        position: absolute;
+        z-index: 4;
+        pointer-events: none;
+        min-width: 176px;
+        max-width: 230px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(118, 228, 247, 0.18);
+        background: rgba(6, 8, 12, 0.94);
+        box-shadow: 0 18px 52px rgba(0, 0, 0, 0.42);
+        transform: translate(14px, -112%);
+      }
+
+      .tooltip strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.98rem;
+        letter-spacing: -0.03em;
+      }
+
+      .tooltip span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.5;
+      }
+
+      .sidebar {
+        display: grid;
+        gap: 12px;
+        padding: 14px;
+        align-content: start;
+      }
+
+      .section {
+        padding: 16px;
+      }
+
+      .section-label {
+        display: block;
+        color: var(--faint);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .section h2 {
+        margin: 8px 0 8px;
+        font-size: 1.08rem;
+        letter-spacing: -0.04em;
+      }
+
+      .section p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.035);
+        color: var(--text);
+        font-size: 0.84rem;
+      }
+
+      .chip strong {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .selected-card {
+        border-color: rgba(118, 228, 247, 0.22);
+        background:
+          linear-gradient(180deg, rgba(118, 228, 247, 0.08), rgba(255, 255, 255, 0.02)),
+          rgba(255, 255, 255, 0.03);
+      }
+
+      .node-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .node-name {
+        margin: 0;
+        font-size: 1.3rem;
+        letter-spacing: -0.05em;
+      }
+
+      .swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        box-shadow: 0 0 14px currentColor;
+        flex: 0 0 auto;
+        margin-top: 4px;
+      }
+
+      .node-meta {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .neighbor-list {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0 0;
+        padding: 0;
+        list-style: none;
+        max-height: 250px;
+        overflow: auto;
+      }
+
+      .neighbor-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .neighbor-name {
+        min-width: 0;
+        color: var(--text);
+        font-size: 0.92rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .neighbor-meta {
+        flex: 0 0 auto;
+        color: var(--muted);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      .tip-list {
+        display: grid;
+        gap: 10px;
+        margin: 12px 0 0;
+        padding: 0 0 0 18px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .tip-list li {
+        padding-left: 4px;
+      }
+
+      .empty-state {
+        margin-top: 10px;
+        padding: 14px 14px 13px;
+        border-radius: 16px;
+        border: 1px dashed rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .scroll-hint {
+        margin-top: 10px;
+        color: var(--faint);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+      }
+
+      .metrics-row {
+        display: grid;
+        gap: 12px;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .metric-card {
+        padding: 14px 14px 13px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .metric-label {
+        color: var(--faint);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .metric-value {
+        margin-top: 8px;
+        font-size: 1.32rem;
+        font-weight: 700;
+        letter-spacing: -0.05em;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .metric-note {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .selected-summary {
+        display: grid;
+        gap: 10px;
+      }
+
+      .selected-summary p {
+        margin: 0;
+      }
+
+      .node-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .node-stats .chip {
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      @media (max-width: 1080px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .graph-panel {
+          min-height: 520px;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .shell {
+          width: min(100vw - 18px, 100%);
+          padding: 14px 0 18px;
+        }
+
+        .hero {
+          flex-direction: column;
+        }
+
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .metric-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .graph-panel {
+          min-height: 460px;
+          padding: 12px;
+        }
+
+        .sidebar {
+          padding: 12px;
+        }
+
+        .section {
+          padding: 14px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+
+    <script>
+      const {
+        Fragment,
+        startTransition,
+        useEffect,
+        useLayoutEffect,
+        useMemo,
+        useRef,
+        useState,
+      } = React;
+      const h = React.createElement;
+      const { createRoot } = ReactDOM;
+
+      const NODE_COUNT = 100;
+      const GROUP_COLORS = ["#8fd7ff", "#8de8c1", "#f4d27c", "#f3a8b2", "#c9b7ff"];
+
+      function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function addLink(links, seen, source, target, strength) {
+        if (source === target) {
+          return;
+        }
+
+        const key = source < target ? `${source}::${target}` : `${target}::${source}`;
+        if (seen.has(key)) {
+          return;
+        }
+
+        seen.add(key);
+        links.push({ source, target, strength });
+      }
+
+      function generateGraphData(count = NODE_COUNT) {
+        const nodes = Array.from({ length: count }, (_, index) => {
+          const value = randomInt(18, 96);
+          return {
+            id: `node-${index + 1}`,
+            label: `数据点 ${String(index + 1).padStart(3, "0")}`,
+            value,
+            group: randomInt(0, GROUP_COLORS.length - 1),
+            radius: 4.4 + value * 0.06,
+          };
+        });
+
+        const links = [];
+        const seen = new Set();
+
+        for (let index = 1; index < count; index += 1) {
+          const span = Math.min(index, 8);
+          const targetIndex = randomInt(Math.max(0, index - span), index - 1);
+          addLink(
+            links,
+            seen,
+            nodes[index].id,
+            nodes[targetIndex].id,
+            0.42 + Math.random() * 0.9
+          );
+        }
+
+        const extraLinks = Math.round(count * 1.05);
+        for (let index = 0; index < extraLinks; index += 1) {
+          const sourceIndex = randomInt(0, count - 1);
+          let targetIndex = randomInt(0, count - 1);
+          if (sourceIndex === targetIndex) {
+            targetIndex = (targetIndex + 1) % count;
+          }
+
+          addLink(
+            links,
+            seen,
+            nodes[sourceIndex].id,
+            nodes[targetIndex].id,
+            0.36 + Math.random() * 1.04
+          );
+        }
+
+        return { nodes, links };
+      }
+
+      function buildAdjacency(graph) {
+        const adjacency = new Map();
+
+        graph.nodes.forEach((node) => {
+          adjacency.set(node.id, new Set([node.id]));
+        });
+
+        graph.links.forEach((link) => {
+          const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+          const targetId = typeof link.target === "object" ? link.target.id : link.target;
+
+          adjacency.get(sourceId)?.add(targetId);
+          adjacency.get(targetId)?.add(sourceId);
+        });
+
+        return adjacency;
+      }
+
+      function useElementSize(ref) {
+        const [size, setSize] = useState({ width: 0, height: 0 });
+
+        useLayoutEffect(() => {
+          const element = ref.current;
+          if (!element) {
+            return undefined;
+          }
+
+          let frame = 0;
+          const update = () => {
+            const rect = element.getBoundingClientRect();
+            setSize({
+              width: Math.round(rect.width),
+              height: Math.round(rect.height),
+            });
+          };
+
+          update();
+
+          if (typeof ResizeObserver === "undefined") {
+            window.addEventListener("resize", update);
+            return () => {
+              window.removeEventListener("resize", update);
+            };
+          }
+
+          const observer = new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(update);
+          });
+
+          observer.observe(element);
+
+          return () => {
+            cancelAnimationFrame(frame);
+            observer.disconnect();
+          };
+        }, [ref]);
+
+        return size;
+      }
+
+      function ForceGraph({ graph, adjacency, selectedId, setSelectedId }) {
+        const frameRef = useRef(null);
+        const svgRef = useRef(null);
+        const graphRef = useRef(null);
+        const [tooltip, setTooltip] = useState(null);
+        const size = useElementSize(frameRef);
+
+        useEffect(() => {
+          setTooltip(null);
+        }, [graph]);
+
+        useEffect(() => {
+          if (!size.width || !size.height || !svgRef.current) {
+            return undefined;
+          }
+
+          const svg = d3.select(svgRef.current);
+          svg.selectAll("*").remove();
+          svg.attr("viewBox", `0 0 ${size.width} ${size.height}`);
+
+          const defs = svg.append("defs");
+          const glow = defs
+            .append("filter")
+            .attr("id", "node-glow")
+            .attr("x", "-60%")
+            .attr("y", "-60%")
+            .attr("width", "220%")
+            .attr("height", "220%");
+          glow.append("feGaussianBlur").attr("stdDeviation", "3.5").attr("result", "blur");
+          const merge = glow.append("feMerge");
+          merge.append("feMergeNode").attr("in", "blur");
+          merge.append("feMergeNode").attr("in", "SourceGraphic");
+
+          const zoomLayer = svg.append("g").attr("class", "zoom-layer");
+          const linkLayer = zoomLayer.append("g").attr("class", "links");
+          const nodeLayer = zoomLayer.append("g").attr("class", "nodes");
+
+          const nodes = graph.nodes.map((node) => ({ ...node }));
+          const links = graph.links.map((link) => ({ ...link }));
+          const colorScale = d3.scaleOrdinal(GROUP_COLORS);
+
+          const showTooltip = (event, datum) => {
+            if (!frameRef.current) {
+              return;
+            }
+
+            const bounds = frameRef.current.getBoundingClientRect();
+            const degree = Math.max(0, (adjacency.get(datum.id)?.size ?? 1) - 1);
+            const maxX = Math.max(12, bounds.width - 220);
+            const maxY = Math.max(20, bounds.height - 28);
+            const x = clamp(event.clientX - bounds.left + 14, 12, maxX);
+            const y = clamp(event.clientY - bounds.top + 14, 20, maxY);
+
+            setTooltip({
+              x,
+              y,
+              datum,
+              degree,
+            });
+          };
+
+          const drag = d3
+            .drag()
+            .on("start", (event, datum) => {
+              if (!event.active) {
+                simulation.alphaTarget(0.16).restart();
+              }
+              datum.fx = datum.x;
+              datum.fy = datum.y;
+            })
+            .on("drag", (event, datum) => {
+              datum.fx = event.x;
+              datum.fy = event.y;
+            })
+            .on("end", (event, datum) => {
+              if (!event.active) {
+                simulation.alphaTarget(0);
+              }
+              datum.fx = null;
+              datum.fy = null;
+            });
+
+          const link = linkLayer
+            .selectAll("line")
+            .data(links, (datum, index) => datum.id ?? index)
+            .join("line")
+            .attr("stroke", "rgba(194, 205, 220, 0.18)")
+            .attr("stroke-opacity", 0.34)
+            .attr("stroke-linecap", "round")
+            .attr("stroke-width", (datum) => 0.55 + datum.strength * 0.55);
+
+          const node = nodeLayer
+            .selectAll("circle")
+            .data(nodes, (datum) => datum.id)
+            .join("circle")
+            .attr("r", (datum) => datum.radius)
+            .attr("fill", (datum) => colorScale(datum.group))
+            .attr("fill-opacity", 0.94)
+            .attr("stroke", "rgba(255, 255, 255, 0.18)")
+            .attr("stroke-width", 1)
+            .style("cursor", "pointer")
+            .on("mouseenter", (event, datum) => showTooltip(event, datum))
+            .on("mousemove", (event, datum) => showTooltip(event, datum))
+            .on("mouseleave", () => setTooltip(null))
+            .on("click", (event, datum) => {
+              event.stopPropagation();
+              setSelectedId((current) => (current === datum.id ? null : datum.id));
+            })
+            .call(drag);
+
+          const simulation = d3
+            .forceSimulation(nodes)
+            .force(
+              "link",
+              d3
+                .forceLink(links)
+                .id((datum) => datum.id)
+                .distance((datum) => 34 + datum.strength * 30)
+                .strength((datum) => 0.16 + datum.strength * 0.08)
+            )
+            .force("charge", d3.forceManyBody().strength(-62))
+            .force("collision", d3.forceCollide().radius((datum) => datum.radius + 2.8))
+            .force("center", d3.forceCenter(size.width / 2, size.height / 2))
+            .force("x", d3.forceX(size.width / 2).strength(0.024))
+            .force("y", d3.forceY(size.height / 2).strength(0.024))
+            .on("tick", () => {
+              link
+                .attr("x1", (datum) => datum.source.x)
+                .attr("y1", (datum) => datum.source.y)
+                .attr("x2", (datum) => datum.target.x)
+                .attr("y2", (datum) => datum.target.y);
+
+              node.attr("cx", (datum) => datum.x).attr("cy", (datum) => datum.y);
+            });
+
+          const zoom = d3
+            .zoom()
+            .scaleExtent([0.45, 3.2])
+            .on("zoom", (event) => {
+              zoomLayer.attr("transform", event.transform);
+            });
+
+          svg.call(zoom).on("dblclick.zoom", null);
+          svg.on("click", () => setSelectedId(null));
+
+          svg.call(
+            zoom.transform,
+            d3.zoomIdentity
+              .translate(size.width / 2, size.height / 2)
+              .scale(0.92)
+              .translate(-size.width / 2, -size.height / 2)
+          );
+
+          graphRef.current = { node, link, colorScale };
+
+          return () => {
+            simulation.stop();
+            svg.on(".zoom", null);
+            svg.on("click", null);
+          };
+        }, [adjacency, graph, setSelectedId, size.height, size.width]);
+
+        useEffect(() => {
+          if (!graphRef.current) {
+            return;
+          }
+
+          const { node, link, colorScale } = graphRef.current;
+
+          if (!selectedId) {
+            node
+              .attr("opacity", 1)
+              .attr("stroke", "rgba(255, 255, 255, 0.18)")
+              .attr("stroke-width", 1)
+              .attr("filter", null)
+              .attr("fill", (datum) => colorScale(datum.group));
+
+            link
+              .attr("stroke", "rgba(194, 205, 220, 0.18)")
+              .attr("stroke-opacity", 0.34)
+              .attr("stroke-width", (datum) => 0.55 + datum.strength * 0.55);
+
+            return;
+          }
+
+          const neighbors = adjacency.get(selectedId) ?? new Set([selectedId]);
+
+          node
+            .attr("opacity", (datum) => (neighbors.has(datum.id) ? 1 : 0.14))
+            .attr("stroke", (datum) => {
+              if (datum.id === selectedId) {
+                return "#ffffff";
+              }
+              return neighbors.has(datum.id)
+                ? "rgba(255, 255, 255, 0.66)"
+                : "rgba(255, 255, 255, 0.08)";
+            })
+            .attr("stroke-width", (datum) => {
+              if (datum.id === selectedId) {
+                return 2.4;
+              }
+              return neighbors.has(datum.id) ? 1.4 : 0.9;
+            })
+            .attr("filter", (datum) => (datum.id === selectedId ? "url(#node-glow)" : null))
+            .attr("fill", (datum) => {
+              if (datum.id === selectedId) {
+                return "#f8fbfd";
+              }
+              return colorScale(datum.group);
+            });
+
+          link
+            .attr("stroke", (datum) => {
+              const sourceId = typeof datum.source === "object" ? datum.source.id : datum.source;
+              const targetId = typeof datum.target === "object" ? datum.target.id : datum.target;
+
+              if (sourceId === selectedId || targetId === selectedId) {
+                return "rgba(118, 228, 247, 0.95)";
+              }
+
+              return neighbors.has(sourceId) && neighbors.has(targetId)
+                ? "rgba(255, 255, 255, 0.28)"
+                : "rgba(255, 255, 255, 0.06)";
+            })
+            .attr("stroke-opacity", (datum) => {
+              const sourceId = typeof datum.source === "object" ? datum.source.id : datum.source;
+              const targetId = typeof datum.target === "object" ? datum.target.id : datum.target;
+
+              if (sourceId === selectedId || targetId === selectedId) {
+                return 1;
+              }
+
+              return neighbors.has(sourceId) && neighbors.has(targetId) ? 0.34 : 0.08;
+            })
+            .attr("stroke-width", (datum) => {
+              const sourceId = typeof datum.source === "object" ? datum.source.id : datum.source;
+              const targetId = typeof datum.target === "object" ? datum.target.id : datum.target;
+
+              if (sourceId === selectedId || targetId === selectedId) {
+                return 1.6 + datum.strength * 0.65;
+              }
+
+              return 0.45 + datum.strength * 0.3;
+            });
+
+          node.filter((datum) => datum.id === selectedId).raise();
+        }, [adjacency, selectedId]);
+
+        return h(
+          "div",
+          { className: "graph-shell", ref: frameRef },
+          h("div", { className: "graph-meta" }, "Wheel zoom · Drag pan"),
+          h("div", { className: "graph-footer" }, h("b", null, "提示"), "悬停查看信息，点击节点切换高亮"),
+          h("svg", {
+            ref: svgRef,
+            className: "graph",
+            role: "img",
+            "aria-label": "100 个随机数据点构成的力导向图",
+          }),
+          tooltip &&
+            h(
+              "div",
+              {
+                className: "tooltip",
+                style: {
+                  left: `${tooltip.x}px`,
+                  top: `${tooltip.y}px`,
+                },
+              },
+              h("strong", null, tooltip.datum.label),
+              h("span", null, `数值 ${tooltip.datum.value} · 组 ${tooltip.datum.group + 1}`),
+              h("span", null, `${tooltip.degree} 条相邻边`)
+            )
+        );
+      }
+
+      function App() {
+        const [graph, setGraph] = useState(() => generateGraphData());
+        const [selectedId, setSelectedId] = useState(null);
+
+        const adjacency = useMemo(() => buildAdjacency(graph), [graph]);
+
+        const selectedNode = useMemo(
+          () => graph.nodes.find((node) => node.id === selectedId) ?? null,
+          [graph.nodes, selectedId]
+        );
+
+        const selectedNeighbors = useMemo(() => {
+          if (!selectedId) {
+            return [];
+          }
+
+          return Array.from(adjacency.get(selectedId) ?? [])
+            .filter((id) => id !== selectedId)
+            .map((id) => graph.nodes.find((node) => node.id === id))
+            .filter(Boolean)
+            .sort((left, right) => right.value - left.value || left.label.localeCompare(right.label));
+        }, [adjacency, graph.nodes, selectedId]);
+
+        const averageDegree = ((graph.links.length * 2) / graph.nodes.length).toFixed(1);
+        const density = (
+          (graph.links.length / (graph.nodes.length * (graph.nodes.length - 1) * 0.5)) *
+          100
+        ).toFixed(1);
+
+        const selectedDegree = selectedNode
+          ? Math.max(0, (adjacency.get(selectedNode.id)?.size ?? 1) - 1)
+          : 0;
+
+        const regenerate = () => {
+          startTransition(() => {
+            setGraph(generateGraphData());
+            setSelectedId(null);
+          });
+        };
+
+        return h(
+          "main",
+          { className: "shell" },
+          h(
+            "section",
+            { className: "hero" },
+            h(
+              "div",
+              { className: "hero-copy" },
+              h("div", { className: "eyebrow" }, "React + D3 · 单文件"),
+              h("h1", null, "随机力导向图"),
+              h(
+                "p",
+                null,
+                "生成 100 个随机数据点并绘制力导向关系图。支持节点悬停 Tooltip、点击相邻高亮、滚轮缩放和拖拽平移，全部在一个 HTML 文件中完成。"
+              )
+            ),
+            h(
+              "div",
+              { className: "actions" },
+              h(
+                "button",
+                { type: "button", className: "ghost-button primary", onClick: regenerate },
+                "重新生成"
+              )
+            )
+          ),
+          h(
+            "section",
+            { className: "stats" },
+            h(
+              "div",
+              { className: "stat-card" },
+              h("span", { className: "stat-label" }, "节点"),
+              h("strong", { className: "stat-value" }, graph.nodes.length),
+              h("div", { className: "stat-note" }, "随机数据点数量")
+            ),
+            h(
+              "div",
+              { className: "stat-card" },
+              h("span", { className: "stat-label" }, "边"),
+              h("strong", { className: "stat-value" }, graph.links.length),
+              h("div", { className: "stat-note" }, "力导向连接数")
+            ),
+            h(
+              "div",
+              { className: "stat-card" },
+              h("span", { className: "stat-label" }, "平均度"),
+              h("strong", { className: "stat-value" }, averageDegree),
+              h("div", { className: "stat-note" }, "每个节点的平均连接数")
+            ),
+            h(
+              "div",
+              { className: "stat-card" },
+              h("span", { className: "stat-label" }, "图密度"),
+              h("strong", { className: "stat-value" }, `${density}%`),
+              h("div", { className: "stat-note" }, "相对可能连接的占比")
+            )
+          ),
+          h(
+            "section",
+            { className: "layout" },
+            h(
+              "div",
+              { className: "panel graph-panel" },
+              h(ForceGraph, {
+                graph,
+                adjacency,
+                selectedId,
+                setSelectedId,
+              })
+            ),
+            h(
+              "aside",
+              { className: "panel sidebar" },
+              h(
+                "div",
+                { className: `section${selectedNode ? " selected-card" : ""}` },
+                h("span", { className: "section-label" }, "当前节点"),
+                selectedNode
+                  ? h(
+                      Fragment,
+                      null,
+                      h(
+                        "div",
+                        { className: "node-head" },
+                        h(
+                          "div",
+                          null,
+                          h("h2", { className: "node-name" }, selectedNode.label),
+                          h(
+                            "p",
+                            null,
+                            `选中后将高亮它自身以及 ${selectedDegree} 个相邻节点。`
+                          )
+                        ),
+                        h("span", {
+                          className: "swatch",
+                          style: { color: GROUP_COLORS[selectedNode.group] },
+                        })
+                      ),
+                      h(
+                        "div",
+                        { className: "node-meta" },
+                        h(
+                          "div",
+                          { className: "node-stats" },
+                          h("span", { className: "chip" }, "数值 ", h("strong", null, selectedNode.value)),
+                          h(
+                            "span",
+                            { className: "chip" },
+                            "组 ",
+                            h("strong", null, selectedNode.group + 1)
+                          ),
+                          h(
+                            "span",
+                            { className: "chip" },
+                            "邻居 ",
+                            h("strong", null, selectedDegree)
+                          )
+                        ),
+                        h("p", null, "相邻节点按数值从高到低排序。")
+                      ),
+                      h(
+                        "ul",
+                        { className: "neighbor-list" },
+                        ...selectedNeighbors.map((neighbor) =>
+                          h(
+                            "li",
+                            { key: neighbor.id, className: "neighbor-item" },
+                            h("span", { className: "neighbor-name" }, neighbor.label),
+                            h(
+                              "span",
+                              { className: "neighbor-meta" },
+                              `值 ${neighbor.value} · 度 ${Math.max(
+                                0,
+                                (adjacency.get(neighbor.id)?.size ?? 1) - 1
+                              )}`
+                            )
+                          )
+                        )
+                      ),
+                      h(
+                        "div",
+                        { className: "scroll-hint" },
+                        "点击同一个节点可取消高亮，点击空白处也会清除选择。"
+                      )
+                    )
+                  : h(
+                      Fragment,
+                      null,
+                      h("h2", null, "未选择节点"),
+                      h(
+                        "div",
+                        { className: "empty-state" },
+                        "点击任意节点后，这里会显示它的基本信息和邻接列表。"
+                      ),
+                      h(
+                        "div",
+                        { className: "scroll-hint" },
+                        "图中支持滚轮缩放和拖拽平移。"
+                      )
+                    )
+              ),
+              h(
+                "div",
+                { className: "section" },
+                h("span", { className: "section-label" }, "操作"),
+                h("h2", null, "怎么交互"),
+                h(
+                  "ul",
+                  { className: "tip-list" },
+                  h("li", null, "悬停节点显示 Tooltip，包含数值、分组和相邻边数。"),
+                  h("li", null, "点击节点高亮它的相邻节点和关联边。"),
+                  h("li", null, "使用鼠标滚轮缩放画布，按住拖动可以平移视图。"),
+                  h("li", null, "点击右上角按钮可以重新生成一张新的随机图。")
+                )
+              ),
+              h(
+                "div",
+                { className: "section" },
+                h("span", { className: "section-label" }, "状态"),
+                h("h2", null, "当前图概览"),
+                h(
+                  "div",
+                  { className: "metrics-row" },
+                  h(
+                    "div",
+                    { className: "metric-grid" },
+                    h(
+                      "div",
+                      { className: "metric-card" },
+                      h("div", { className: "metric-label" }, "节点"),
+                      h("div", { className: "metric-value" }, graph.nodes.length),
+                      h("div", { className: "metric-note" }, "固定为 100 个随机点")
+                    ),
+                    h(
+                      "div",
+                      { className: "metric-card" },
+                      h("div", { className: "metric-label" }, "边"),
+                      h("div", { className: "metric-value" }, graph.links.length),
+                      h("div", { className: "metric-note" }, "连通结构的总边数")
+                    )
+                  )
+                )
+              )
+            )
+          )
+        );
+      }
+
+      createRoot(document.getElementById("root")).render(h(App));
+    </script>
+  </body>
+</html>
