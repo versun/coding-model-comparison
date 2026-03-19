@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-19 10:38:10 CST",
+  "generatedAt": "2026-03-19 10:49:54 CST",
   "runner": "Playwright Core + Google Chrome 145",
   "rubric": [
     {
@@ -682,12 +682,12 @@
           "linkCount": 239,
           "targetCircleDomIndex": 23,
           "targetCircleBox": {
-            "x": 222.694,
-            "y": 507.048,
+            "x": 222.684,
+            "y": 507.064,
             "width": 17.172,
             "height": 17.172,
-            "cx": 231.28,
-            "cy": 515.634
+            "cx": 231.27,
+            "cy": 515.65
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -1554,12 +1554,12 @@
           "linkCount": 158,
           "targetCircleDomIndex": 41,
           "targetCircleBox": {
-            "x": 740.479,
-            "y": 440.859,
+            "x": 740.587,
+            "y": 440.839,
             "width": 12.548,
             "height": 12.548,
-            "cx": 746.753,
-            "cy": 447.133
+            "cx": 746.861,
+            "cy": 447.113
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -1587,15 +1587,15 @@
         "mobile": {
           "svgCount": 1,
           "nodeCount": 100,
-          "linkCount": 158,
+          "linkCount": 159,
           "targetCircleDomIndex": 41,
           "targetCircleBox": {
-            "x": 216.306,
-            "y": 412.655,
+            "x": 216.21,
+            "y": 412.685,
             "width": 12.548,
             "height": 12.548,
-            "cx": 222.58,
-            "cy": 418.929
+            "cx": 222.484,
+            "cy": 418.959
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -1630,7 +1630,7 @@
         "highlight": {
           "targetChanged": true,
           "nodeStyleChanges": 100,
-          "linkStyleChanges": 157,
+          "linkStyleChanges": 156,
           "nodeOpacityShiftCount": 96,
           "nodeFillShiftCount": 4,
           "linkOpacityShiftCount": 0,
@@ -1654,7 +1654,7 @@
       },
       "notes": [
         "Tooltip 文本长度 40",
-        "点击后节点变化 100，边变化 157",
+        "点击后节点变化 100，边变化 156",
         "缩放比例 0.9 -> 3.13"
       ],
       "rank": 3
@@ -2916,17 +2916,17 @@
           "linkCount": 196,
           "targetCircleDomIndex": 94,
           "targetCircleBox": {
-            "x": 672.806,
-            "y": 505.507,
+            "x": 672.954,
+            "y": 506.631,
             "width": 10.861,
             "height": 10.861,
-            "cx": 678.236,
-            "cy": 510.938
+            "cx": 678.385,
+            "cy": 512.062
           },
           "zoomProbe": {
             "domIndex": 0,
             "className": "zoom-layer",
-            "transform": "translate(38.19999999999999,28.80000000000001) scale(0.92)",
+            "transform": "translate(38.19999999999999,28.879999999999995) scale(0.92)",
             "scale": 0.92,
             "descendantCircles": 100,
             "descendantLines": 201,
@@ -2939,7 +2939,7 @@
           "infoContainerCount": 27,
           "viewportMeta": true,
           "ariaGraphCount": 1,
-          "graphAreaHeight": 720.3,
+          "graphAreaHeight": 722.3,
           "graphAreaWidth": 955.5,
           "scrollWidth": 1440,
           "viewportWidth": 1440,
@@ -2949,15 +2949,15 @@
         "mobile": {
           "svgCount": 1,
           "nodeCount": 100,
-          "linkCount": 198,
+          "linkCount": 200,
           "targetCircleDomIndex": 73,
           "targetCircleBox": {
-            "x": 199.065,
-            "y": 449.689,
+            "x": 199.037,
+            "y": 449.69,
             "width": 16.266,
             "height": 16.266,
-            "cx": 207.198,
-            "cy": 457.821
+            "cx": 207.17,
+            "cy": 457.823
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -3373,12 +3373,12 @@
           "linkCount": 236,
           "targetCircleDomIndex": 83,
           "targetCircleBox": {
-            "x": 677.85,
-            "y": 438.993,
+            "x": 677.828,
+            "y": 438.927,
             "width": 16,
             "height": 16,
-            "cx": 685.85,
-            "cy": 446.993
+            "cx": 685.828,
+            "cy": 446.927
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -3406,15 +3406,15 @@
         "mobile": {
           "svgCount": 1,
           "nodeCount": 100,
-          "linkCount": 235,
+          "linkCount": 234,
           "targetCircleDomIndex": 83,
           "targetCircleBox": {
-            "x": 152.96,
-            "y": 411.373,
+            "x": 153.031,
+            "y": 411.625,
             "width": 16,
             "height": 16,
-            "cx": 160.96,
-            "cy": 419.373
+            "cx": 161.031,
+            "cy": 419.625
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -3464,8 +3464,8 @@
           "afterTransform": "translate(-1440,-900) scale(3)"
         },
         "theme": {
-          "averageRgb": "rgb(17, 21, 28)",
-          "luminance": 20.7
+          "averageRgb": "rgb(17, 21, 27)",
+          "luminance": 20.6
         },
         "rootTextColor": "rgb(230, 237, 243)",
         "consoleErrors": [],
@@ -3827,12 +3827,12 @@
           "linkCount": 204,
           "targetCircleDomIndex": 70,
           "targetCircleBox": {
-            "x": 616.024,
-            "y": 310.884,
+            "x": 616.209,
+            "y": 311.489,
             "width": 20,
             "height": 20,
-            "cx": 626.024,
-            "cy": 320.884
+            "cx": 626.209,
+            "cy": 321.489
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -3863,12 +3863,12 @@
           "linkCount": 205,
           "targetCircleDomIndex": 70,
           "targetCircleBox": {
-            "x": 91.154,
-            "y": 283.309,
+            "x": 91.172,
+            "y": 283.367,
             "width": 20,
             "height": 20,
-            "cx": 101.154,
-            "cy": 293.309
+            "cx": 101.172,
+            "cy": 293.367
           },
           "zoomProbe": {
             "domIndex": 0,
@@ -4314,15 +4314,15 @@
         "mobile": {
           "svgCount": 1,
           "nodeCount": 105,
-          "linkCount": 190,
+          "linkCount": 189,
           "targetCircleDomIndex": 70,
           "targetCircleBox": {
-            "x": 202.646,
-            "y": 444.983,
+            "x": 202.575,
+            "y": 444.958,
             "width": 15.362,
             "height": 15.362,
-            "cx": 210.327,
-            "cy": 452.664
+            "cx": 210.256,
+            "cy": 452.639
           },
           "zoomProbe": {
             "domIndex": 0,

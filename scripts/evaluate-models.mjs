@@ -6,16 +6,6 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { PNG } from "pngjs";
 
-import {
-  RUBRIC,
-  buildScorecard,
-  getRubricTotalPoints,
-} from "./evaluation-scoring.mjs";
-import {
-  isGraphRenderable,
-  isStableGraphWindow,
-} from "./evaluation-stability.mjs";
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const REPORTS_DIR = path.join(ROOT, "reports");
@@ -171,6 +161,820 @@ function averageRgb(list) {
     g: Math.round(total.g / list.length),
     b: Math.round(total.b / list.length),
   };
+}
+
+function parseColorString(value) {
+  if (!value) {
+    return { r: 0, g: 0, b: 0 };
+  }
+
+  const match = value.match(/\d+/g);
+  if (!match || match.length < 3) {
+    return { r: 0, g: 0, b: 0 };
+  }
+
+  return {
+    r: Number(match[0]),
+    g: Number(match[1]),
+    b: Number(match[2]),
+  };
+}
+
+function getDefaultDesktopMetrics() {
+  return {
+    svgCount: 0,
+    nodeCount: 0,
+    linkCount: 0,
+    targetCircleDomIndex: null,
+    graphAreaHeight: 0,
+    graphAreaWidth: 0,
+    headingCount: 0,
+    descriptiveBlockCount: 0,
+    statsBlockCount: 0,
+    infoContainerCount: 0,
+    controlCount: 0,
+    viewportMeta: false,
+    ariaGraphCount: 0,
+    rootTextColor: "rgb(255, 255, 255)",
+  };
+}
+
+function getDefaultTooltipMetrics() {
+  return {
+    visible: false,
+    count: 0,
+    textLength: 0,
+    richness: 0,
+    sample: "",
+  };
+}
+
+function getDefaultHighlightMetrics() {
+  return {
+    targetChanged: false,
+    nodeStyleChanges: 0,
+    linkStyleChanges: 0,
+    nodeOpacityShiftCount: 0,
+    nodeFillShiftCount: 0,
+    linkOpacityShiftCount: 0,
+    dimmedNodes: 0,
+    highlightedClassCount: 0,
+  };
+}
+
+function getDefaultZoomMetrics() {
+  return {
+    changed: false,
+    beforeScale: 1,
+    afterScale: 1,
+    beforeTransform: "",
+    afterTransform: "",
+  };
+}
+
+function getDefaultMobileMetrics() {
+  return {
+    scrollWidth: 9999,
+    viewportWidth: 390,
+    graphAreaHeight: 0,
+    graphAreaWidth: 0,
+    nodeCount: 0,
+    viewportMeta: false,
+  };
+}
+
+function getDefaultThemeMetrics() {
+  return {
+    luminance: 255,
+    average: { r: 255, g: 255, b: 255 },
+  };
+}
+
+const RUBRIC = [
+  {
+    key: "loadStability",
+    label: "渲染稳定性",
+    points: 10,
+    detail: "检查页面是否稳定完成首次渲染，并且交互探针能够正常工作。",
+    subItems: [
+      {
+        key: "interactiveSvg",
+        label: "可交互 SVG 已渲染",
+        points: 4,
+        detail: "存在可见 SVG 且页面进入可评估状态。",
+      },
+      {
+        key: "targetProbeReady",
+        label: "目标节点可定位",
+        points: 1,
+        detail: "自动化能锁定一个真实节点作为后续交互探针。",
+      },
+      {
+        key: "minimumNodeCoverage",
+        label: "节点达到最低可用量",
+        points: 1,
+        detail: "可见节点数达到基础可用阈值。",
+      },
+      {
+        key: "minimumLinkCoverage",
+        label: "边达到最低可用量",
+        points: 1,
+        detail: "可见边数达到基础可用阈值。",
+      },
+      {
+        key: "pageErrors",
+        label: "无 pageerror",
+        points: 2,
+        detail: "运行期无致命页面异常。",
+      },
+      {
+        key: "consoleErrors",
+        label: "无 console error",
+        points: 1,
+        detail: "控制台未出现错误级日志。",
+      },
+    ],
+  },
+  {
+    key: "graphData",
+    label: "图数据完整度",
+    points: 18,
+    detail: "评估节点数量、边数量以及图区域是否足够完整。",
+    subItems: [
+      {
+        key: "nodeCountAccuracy",
+        label: "节点数量接近 100",
+        points: 8,
+        detail: "对 100 个随机数据点的还原是否准确。",
+      },
+      {
+        key: "linkDensity",
+        label: "边数量充分",
+        points: 4,
+        detail: "图结构是否具备足够的连边密度。",
+      },
+      {
+        key: "graphProbeReady",
+        label: "图探针可用",
+        points: 2,
+        detail: "自动化可定位中心节点并用于交互探测。",
+      },
+      {
+        key: "graphHeight",
+        label: "图区域高度充足",
+        points: 2,
+        detail: "图表占据了足够的垂直空间。",
+      },
+      {
+        key: "graphWidth",
+        label: "图区域宽度充足",
+        points: 2,
+        detail: "图表占据了足够的水平空间。",
+      },
+    ],
+  },
+  {
+    key: "tooltip",
+    label: "Tooltip 交互",
+    points: 20,
+    detail: "检查悬停反馈是否存在、信息是否丰富、字段是否足够完整。",
+    subItems: [
+      {
+        key: "tooltipVisible",
+        label: "悬停后 Tooltip 可见",
+        points: 6,
+        detail: "悬停真实节点后出现 Tooltip。",
+      },
+      {
+        key: "tooltipLength",
+        label: "Tooltip 文本长度",
+        points: 5,
+        detail: "Tooltip 提供了足够的信息量，而不是只显示一个短标签。",
+      },
+      {
+        key: "tooltipRichness",
+        label: "Tooltip 字段丰富度",
+        points: 4,
+        detail: "Tooltip 中包含多行、多块或多字段信息。",
+      },
+      {
+        key: "tooltipStructure",
+        label: "Tooltip 信息结构",
+        points: 4,
+        detail: "Tooltip 不是单一值，而是能读出多项语义信息。",
+      },
+      {
+        key: "tooltipConsistency",
+        label: "Tooltip 探针一致性",
+        points: 1,
+        detail: "页面中存在稳定的 Tooltip 容器或唯一候选。",
+      },
+    ],
+  },
+  {
+    key: "highlight",
+    label: "邻接高亮",
+    points: 20,
+    detail: "检查点击后是否能区分目标节点、相邻节点与非相邻节点。",
+    subItems: [
+      {
+        key: "targetFeedback",
+        label: "目标节点反馈",
+        points: 4,
+        detail: "被点击节点自身出现明显状态变化。",
+      },
+      {
+        key: "nodeSeparation",
+        label: "节点层区分",
+        points: 5,
+        detail: "节点样式在点击后出现充分变化。",
+      },
+      {
+        key: "linkSeparation",
+        label: "边层区分",
+        points: 4,
+        detail: "连边样式在点击后出现足够变化。",
+      },
+      {
+        key: "neighborIsolation",
+        label: "非邻接节点弱化",
+        points: 4,
+        detail: "非相邻节点被显著弱化或降低透明度。",
+      },
+      {
+        key: "semanticHighlighting",
+        label: "高亮语义标记",
+        points: 3,
+        detail: "存在 highlighted/selected/active 等可识别语义类。",
+      },
+    ],
+  },
+  {
+    key: "zoom",
+    label: "缩放能力",
+    points: 12,
+    detail: "检查滚轮缩放是否生效，以及缩放变化是否足够明显。",
+    subItems: [
+      {
+        key: "zoomDetected",
+        label: "检测到缩放响应",
+        points: 5,
+        detail: "对图区域滚轮操作后容器状态发生变化。",
+      },
+      {
+        key: "zoomDelta",
+        label: "缩放幅度",
+        points: 4,
+        detail: "缩放比例的变化足够明显。",
+      },
+      {
+        key: "zoomTransform",
+        label: "缩放变换被记录",
+        points: 2,
+        detail: "transform / viewBox 等状态明显变化。",
+      },
+      {
+        key: "zoomScaleReadable",
+        label: "缩放比例可读",
+        points: 1,
+        detail: "缩放前后比例为可解析的有效数字。",
+      },
+    ],
+  },
+  {
+    key: "infoArchitecture",
+    label: "信息架构",
+    points: 6,
+    detail: "检查页面是否提供标题、说明、辅助信息与基础可访问性。",
+    subItems: [
+      {
+        key: "headings",
+        label: "标题层级",
+        points: 1,
+        detail: "存在明确标题或标题层级。",
+      },
+      {
+        key: "descriptions",
+        label: "说明文案",
+        points: 2,
+        detail: "提供足够的说明、帮助或上下文文案。",
+      },
+      {
+        key: "supportingBlocks",
+        label: "辅助信息块",
+        points: 1,
+        detail: "提供统计、面板、摘要等辅助信息块。",
+      },
+      {
+        key: "controls",
+        label: "控制与摘要入口",
+        points: 0.5,
+        detail: "存在按钮、链接或摘要式操作入口。",
+      },
+      {
+        key: "viewportMeta",
+        label: "移动端 viewport 元信息",
+        points: 0.5,
+        detail: "声明了 viewport，便于移动端正确缩放。",
+      },
+      {
+        key: "ariaGraph",
+        label: "图表可访问性标识",
+        points: 1,
+        detail: "为 SVG 或图表区域提供 ARIA 语义。",
+      },
+    ],
+  },
+  {
+    key: "darkTheme",
+    label: "暗色主题",
+    points: 6,
+    detail: "检查背景是否足够深、正文是否足够亮、整体对比是否达标。",
+    subItems: [
+      {
+        key: "darkBackground",
+        label: "背景亮度",
+        points: 3,
+        detail: "截图采样的平均背景亮度足够低。",
+      },
+      {
+        key: "brightText",
+        label: "正文亮度",
+        points: 2,
+        detail: "正文颜色足够亮，能够形成暗色界面阅读对比。",
+      },
+      {
+        key: "themeContrast",
+        label: "整体明暗对比",
+        points: 1,
+        detail: "背景与文本之间保持足够的亮度差。",
+      },
+    ],
+  },
+  {
+    key: "responsive",
+    label: "移动端适配",
+    points: 8,
+    detail: "在 390px 宽视口下检查溢出、图高度、节点保留率和基础元信息。",
+    subItems: [
+      {
+        key: "mobileOverflow",
+        label: "无明显横向溢出",
+        points: 3,
+        detail: "移动端滚动宽度与视口宽度接近。",
+      },
+      {
+        key: "mobileGraphHeight",
+        label: "图区域高度",
+        points: 2,
+        detail: "移动端仍保留足够的图表高度。",
+      },
+      {
+        key: "mobileNodeRetention",
+        label: "节点保留率",
+        points: 2,
+        detail: "移动端仍能看到足够数量的节点。",
+      },
+      {
+        key: "mobileViewportMeta",
+        label: "移动端元信息",
+        points: 1,
+        detail: "页面声明了 viewport，利于移动端布局。",
+      },
+    ],
+  },
+];
+
+function getRubricItem(key) {
+  const item = RUBRIC.find((entry) => entry.key === key);
+  if (!item) {
+    throw new Error(`Unknown rubric key: ${key}`);
+  }
+  return item;
+}
+
+function createScoredItems(rubricItem, scores) {
+  return rubricItem.subItems.map((subItem) => {
+    const rawScore = scores[subItem.key] ?? 0;
+    return {
+      key: subItem.key,
+      label: subItem.label,
+      detail: subItem.detail,
+      maxPoints: subItem.points,
+      score: clamp(round(rawScore, 1), 0, subItem.points),
+    };
+  });
+}
+
+function createBreakdown(key, scores) {
+  const rubricItem = getRubricItem(key);
+  const items = createScoredItems(rubricItem, scores);
+  return {
+    label: rubricItem.label,
+    detail: rubricItem.detail,
+    maxPoints: rubricItem.points,
+    items,
+  };
+}
+
+function sumBreakdownScore(breakdown) {
+  return round(
+    breakdown.items.reduce((sum, item) => sum + Number(item.score), 0),
+    1,
+  );
+}
+
+function scoreLoadStability(context) {
+  const desktop = context.desktop;
+  return createBreakdown("loadStability", {
+    interactiveSvg: context.renderReady && desktop.svgCount >= 1 ? 4 : 0,
+    targetProbeReady: desktop.targetCircleDomIndex != null ? 1 : 0,
+    minimumNodeCoverage: desktop.nodeCount >= 95 ? 1 : 0,
+    minimumLinkCoverage: desktop.linkCount >= 60 ? 1 : 0,
+    pageErrors: context.pageErrors.length === 0 ? 2 : 0,
+    consoleErrors: context.consoleErrors.length === 0 ? 1 : 0,
+  });
+}
+
+function scoreGraphData(context) {
+  const desktop = context.desktop;
+  let nodeCountAccuracy = 0;
+  if (desktop.nodeCount >= 98 && desktop.nodeCount <= 102) {
+    nodeCountAccuracy = 8;
+  } else if (desktop.nodeCount >= 92 && desktop.nodeCount <= 108) {
+    nodeCountAccuracy = 6;
+  } else if (desktop.nodeCount >= 80 && desktop.nodeCount <= 120) {
+    nodeCountAccuracy = 3;
+  }
+
+  let linkDensity = 0;
+  if (desktop.linkCount >= 90) {
+    linkDensity = 4;
+  } else if (desktop.linkCount >= 60) {
+    linkDensity = 3;
+  } else if (desktop.linkCount >= 30) {
+    linkDensity = 1;
+  }
+
+  let graphHeight = 0;
+  if (desktop.graphAreaHeight >= 480) {
+    graphHeight = 2;
+  } else if (desktop.graphAreaHeight >= 280) {
+    graphHeight = 1;
+  }
+
+  let graphWidth = 0;
+  if (desktop.graphAreaWidth >= 720) {
+    graphWidth = 2;
+  } else if (desktop.graphAreaWidth >= 420) {
+    graphWidth = 1;
+  }
+
+  return createBreakdown("graphData", {
+    nodeCountAccuracy,
+    linkDensity,
+    graphProbeReady: desktop.targetCircleDomIndex != null ? 2 : 0,
+    graphHeight,
+    graphWidth,
+  });
+}
+
+function scoreTooltip(context) {
+  const tooltip = context.tooltip;
+  let tooltipLength = 0;
+  if (tooltip.textLength >= 56) {
+    tooltipLength = 5;
+  } else if (tooltip.textLength >= 32) {
+    tooltipLength = 4;
+  } else if (tooltip.textLength >= 12) {
+    tooltipLength = 2;
+  } else if (tooltip.textLength >= 6) {
+    tooltipLength = 1;
+  }
+
+  let tooltipRichness = 0;
+  if (tooltip.richness >= 4) {
+    tooltipRichness = 4;
+  } else if (tooltip.richness >= 2) {
+    tooltipRichness = 3;
+  } else if (tooltip.richness >= 1) {
+    tooltipRichness = 1;
+  }
+
+  const sampleTokenCount = tooltip.sample
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean).length;
+  const tooltipStructure =
+    tooltip.visible &&
+    (tooltip.richness >= 3 || sampleTokenCount >= 6 || tooltip.textLength >= 40)
+      ? 4
+      : 0;
+
+  return createBreakdown("tooltip", {
+    tooltipVisible: tooltip.visible ? 6 : 0,
+    tooltipLength,
+    tooltipRichness,
+    tooltipStructure,
+    tooltipConsistency: tooltip.visible && tooltip.count >= 1 ? 1 : 0,
+  });
+}
+
+function scoreHighlight(context) {
+  const highlight = context.highlight;
+  let nodeSeparation = 0;
+  if (highlight.nodeStyleChanges >= 8) {
+    nodeSeparation = 5;
+  } else if (highlight.nodeStyleChanges >= 4) {
+    nodeSeparation = 3;
+  } else if (highlight.nodeStyleChanges >= 2) {
+    nodeSeparation = 2;
+  } else if (highlight.nodeStyleChanges >= 1) {
+    nodeSeparation = 1;
+  }
+
+  let linkSeparation = 0;
+  if (
+    highlight.linkStyleChanges >= 4 ||
+    highlight.linkOpacityShiftCount >= 2
+  ) {
+    linkSeparation = 4;
+  } else if (
+    highlight.linkStyleChanges >= 1 ||
+    highlight.linkOpacityShiftCount >= 1
+  ) {
+    linkSeparation = 2;
+  }
+
+  let neighborIsolation = 0;
+  if (highlight.dimmedNodes >= 8 || highlight.nodeOpacityShiftCount >= 8) {
+    neighborIsolation = 4;
+  } else if (
+    highlight.dimmedNodes >= 2 ||
+    highlight.nodeOpacityShiftCount >= 3 ||
+    highlight.nodeFillShiftCount >= 3
+  ) {
+    neighborIsolation = 2;
+  }
+
+  let semanticHighlighting = 0;
+  if (highlight.highlightedClassCount >= 3) {
+    semanticHighlighting = 3;
+  } else if (highlight.highlightedClassCount >= 1) {
+    semanticHighlighting = 1;
+  }
+
+  return createBreakdown("highlight", {
+    targetFeedback: highlight.targetChanged ? 4 : 0,
+    nodeSeparation,
+    linkSeparation,
+    neighborIsolation,
+    semanticHighlighting,
+  });
+}
+
+function scoreZoom(context) {
+  const zoom = context.zoom;
+  const scaleDelta = Math.abs(zoom.afterScale - zoom.beforeScale);
+
+  let zoomDelta = 0;
+  if (scaleDelta >= 0.25) {
+    zoomDelta = 4;
+  } else if (scaleDelta >= 0.12) {
+    zoomDelta = 3;
+  } else if (scaleDelta >= 0.05) {
+    zoomDelta = 1;
+  }
+
+  return createBreakdown("zoom", {
+    zoomDetected: zoom.changed ? 5 : 0,
+    zoomDelta,
+    zoomTransform:
+      zoom.beforeTransform !== zoom.afterTransform && zoom.changed ? 2 : 0,
+    zoomScaleReadable:
+      Number.isFinite(zoom.beforeScale) &&
+      Number.isFinite(zoom.afterScale) &&
+      zoom.afterScale > 0
+        ? 1
+        : 0,
+  });
+}
+
+function scoreInfoArchitecture(context) {
+  const desktop = context.desktop;
+  let descriptions = 0;
+  if (desktop.descriptiveBlockCount >= 3) {
+    descriptions = 2;
+  } else if (desktop.descriptiveBlockCount >= 2) {
+    descriptions = 1.5;
+  } else if (desktop.descriptiveBlockCount >= 1) {
+    descriptions = 1;
+  }
+
+  let supportingBlocks = 0;
+  if (desktop.infoContainerCount >= 3 || desktop.statsBlockCount >= 3) {
+    supportingBlocks = 1;
+  } else if (desktop.infoContainerCount >= 1 || desktop.statsBlockCount >= 1) {
+    supportingBlocks = 0.5;
+  }
+
+  return createBreakdown("infoArchitecture", {
+    headings: desktop.headingCount >= 1 ? 1 : 0,
+    descriptions,
+    supportingBlocks,
+    controls: desktop.controlCount >= 1 ? 0.5 : 0,
+    viewportMeta: desktop.viewportMeta ? 0.5 : 0,
+    ariaGraph: desktop.ariaGraphCount >= 1 ? 1 : 0,
+  });
+}
+
+function scoreDarkTheme(context) {
+  const theme = context.theme;
+  const textLuminance = luminance(parseColorString(context.desktop.rootTextColor));
+  const contrastDelta = textLuminance - theme.luminance;
+
+  let darkBackground = 0;
+  if (theme.luminance <= 70) {
+    darkBackground = 3;
+  } else if (theme.luminance <= 100) {
+    darkBackground = 2;
+  } else if (theme.luminance <= 130) {
+    darkBackground = 1;
+  }
+
+  let brightText = 0;
+  if (textLuminance >= 190) {
+    brightText = 2;
+  } else if (textLuminance >= 160) {
+    brightText = 1;
+  }
+
+  return createBreakdown("darkTheme", {
+    darkBackground,
+    brightText,
+    themeContrast: contrastDelta >= 90 ? 1 : 0,
+  });
+}
+
+function scoreResponsive(context) {
+  const mobile = context.mobile;
+  const overflow = mobile.scrollWidth - mobile.viewportWidth;
+
+  let mobileOverflow = 0;
+  if (overflow <= 12) {
+    mobileOverflow = 3;
+  } else if (overflow <= 24) {
+    mobileOverflow = 2;
+  } else if (overflow <= 36) {
+    mobileOverflow = 1;
+  }
+
+  let mobileGraphHeight = 0;
+  if (mobile.graphAreaHeight >= 260) {
+    mobileGraphHeight = 2;
+  } else if (mobile.graphAreaHeight >= 200) {
+    mobileGraphHeight = 1;
+  }
+
+  let mobileNodeRetention = 0;
+  if (mobile.nodeCount >= 85) {
+    mobileNodeRetention = 2;
+  } else if (mobile.nodeCount >= 60) {
+    mobileNodeRetention = 1;
+  }
+
+  return createBreakdown("responsive", {
+    mobileOverflow,
+    mobileGraphHeight,
+    mobileNodeRetention,
+    mobileViewportMeta: mobile.viewportMeta ? 1 : 0,
+  });
+}
+
+function normalizeContext(input) {
+  return {
+    renderReady: Boolean(input.renderReady),
+    pageErrors: Array.isArray(input.pageErrors) ? input.pageErrors : [],
+    consoleErrors: Array.isArray(input.consoleErrors) ? input.consoleErrors : [],
+    desktop: { ...getDefaultDesktopMetrics(), ...(input.desktop ?? {}) },
+    tooltip: { ...getDefaultTooltipMetrics(), ...(input.tooltip ?? {}) },
+    highlight: { ...getDefaultHighlightMetrics(), ...(input.highlight ?? {}) },
+    zoom: { ...getDefaultZoomMetrics(), ...(input.zoom ?? {}) },
+    mobile: { ...getDefaultMobileMetrics(), ...(input.mobile ?? {}) },
+    theme: { ...getDefaultThemeMetrics(), ...(input.theme ?? {}) },
+  };
+}
+
+function getRubricTotalPoints(rubric = RUBRIC) {
+  return rubric.reduce((sum, item) => sum + Number(item.points), 0);
+}
+
+function buildScorecard(input) {
+  const context = normalizeContext(input);
+  const breakdown = {
+    loadStability: scoreLoadStability(context),
+    graphData: scoreGraphData(context),
+    tooltip: scoreTooltip(context),
+    highlight: scoreHighlight(context),
+    zoom: scoreZoom(context),
+    infoArchitecture: scoreInfoArchitecture(context),
+    darkTheme: scoreDarkTheme(context),
+    responsive: scoreResponsive(context),
+  };
+
+  const scores = Object.fromEntries(
+    Object.entries(breakdown).map(([key, value]) => [
+      key,
+      sumBreakdownScore(value),
+    ]),
+  );
+  const totalScore = round(
+    Object.values(scores).reduce((sum, value) => sum + Number(value), 0),
+    1,
+  );
+
+  return {
+    scores,
+    breakdown,
+    totalScore,
+  };
+}
+
+function pointDistance(left, right) {
+  if (!left || !right) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.hypot(left.cx - right.cx, left.cy - right.cy);
+}
+
+function isGraphRenderable(metrics) {
+  return Boolean(
+    metrics &&
+      metrics.svgCount >= 1 &&
+      metrics.nodeCount >= 50 &&
+      metrics.linkCount >= 20,
+  );
+}
+
+function isStableGraphWindow(samples, options = {}) {
+  const {
+    windowSize = 3,
+    maxLinkCountSpread = 2,
+    maxTargetStepDistance = 3,
+    maxGraphAreaSpread = 4,
+  } = options;
+
+  if (!Array.isArray(samples) || samples.length < windowSize) {
+    return false;
+  }
+
+  const window = samples.slice(-windowSize);
+  if (window.some((metrics) => !isGraphRenderable(metrics))) {
+    return false;
+  }
+
+  const targetCircleDomIndex = window[0]?.targetCircleDomIndex;
+  if (targetCircleDomIndex == null) {
+    return false;
+  }
+
+  if (
+    window.some(
+      (metrics) => metrics.targetCircleDomIndex !== targetCircleDomIndex,
+    )
+  ) {
+    return false;
+  }
+
+  const linkCounts = window.map((metrics) => metrics.linkCount);
+  if (Math.max(...linkCounts) - Math.min(...linkCounts) > maxLinkCountSpread) {
+    return false;
+  }
+
+  const graphHeights = window.map((metrics) => metrics.graphAreaHeight);
+  if (
+    Math.max(...graphHeights) - Math.min(...graphHeights) > maxGraphAreaSpread
+  ) {
+    return false;
+  }
+
+  const graphWidths = window.map((metrics) => metrics.graphAreaWidth);
+  if (
+    Math.max(...graphWidths) - Math.min(...graphWidths) > maxGraphAreaSpread
+  ) {
+    return false;
+  }
+
+  for (let index = 1; index < window.length; index += 1) {
+    const previous = window[index - 1]?.targetCircleBox;
+    const current = window[index]?.targetCircleBox;
+    if (pointDistance(previous, current) > maxTargetStepDistance) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function hashSeed(input) {
