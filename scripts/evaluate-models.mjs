@@ -28,6 +28,30 @@ UI 风格要求现代、极简、暗色模式。`;
 
 const MODELS = [
   {
+    file: "gemini-3.1-pro-preview.html",
+    name: "Gemini 3.1 Pro Preview",
+    runner: "Claude Code",
+    durationText: "2分 15秒",
+    durationSeconds: 135,
+    baseline: false,
+  },
+  {
+    file: "claude-sonnet-4.6.html",
+    name: "Claude Sonnet 4.6",
+    runner: "Claude Code",
+    durationText: "1分 2秒",
+    durationSeconds: 62,
+    baseline: false,
+  },
+  {
+    file: "kat-coder-pro-v2.html",
+    name: "KAT-Coder-Pro V2",
+    runner: "Claude Code",
+    durationText: "48秒",
+    durationSeconds: 48,
+    baseline: false,
+  },
+  {
     file: "gpt-5.4-mini.html",
     name: "GPT 5.4 Mini",
     runner: "Codex CLI",
@@ -57,7 +81,7 @@ const MODELS = [
     runner: "Codex CLI",
     durationText: "4分 20秒",
     durationSeconds: 260,
-    baseline: true,
+    baseline: false,
   },
   {
     file: "glm-5.html",
@@ -694,10 +718,7 @@ function scoreHighlight(context) {
   }
 
   let linkSeparation = 0;
-  if (
-    highlight.linkStyleChanges >= 4 ||
-    highlight.linkOpacityShiftCount >= 2
-  ) {
+  if (highlight.linkStyleChanges >= 4 || highlight.linkOpacityShiftCount >= 2) {
     linkSeparation = 4;
   } else if (
     highlight.linkStyleChanges >= 1 ||
@@ -790,7 +811,9 @@ function scoreInfoArchitecture(context) {
 
 function scoreDarkTheme(context) {
   const theme = context.theme;
-  const textLuminance = luminance(parseColorString(context.desktop.rootTextColor));
+  const textLuminance = luminance(
+    parseColorString(context.desktop.rootTextColor),
+  );
   const contrastDelta = textLuminance - theme.luminance;
 
   let darkBackground = 0;
@@ -855,7 +878,9 @@ function normalizeContext(input) {
   return {
     renderReady: Boolean(input.renderReady),
     pageErrors: Array.isArray(input.pageErrors) ? input.pageErrors : [],
-    consoleErrors: Array.isArray(input.consoleErrors) ? input.consoleErrors : [],
+    consoleErrors: Array.isArray(input.consoleErrors)
+      ? input.consoleErrors
+      : [],
     desktop: { ...getDefaultDesktopMetrics(), ...(input.desktop ?? {}) },
     tooltip: { ...getDefaultTooltipMetrics(), ...(input.tooltip ?? {}) },
     highlight: { ...getDefaultHighlightMetrics(), ...(input.highlight ?? {}) },
@@ -911,9 +936,9 @@ function pointDistance(left, right) {
 function isGraphRenderable(metrics) {
   return Boolean(
     metrics &&
-      metrics.svgCount >= 1 &&
-      metrics.nodeCount >= 50 &&
-      metrics.linkCount >= 20,
+    metrics.svgCount >= 1 &&
+    metrics.nodeCount >= 50 &&
+    metrics.linkCount >= 20,
   );
 }
 
@@ -954,14 +979,16 @@ function isStableGraphWindow(samples, options = {}) {
 
   const graphHeights = window.map((metrics) => metrics.graphAreaHeight);
   if (
-    Math.max(...graphHeights) - Math.min(...graphHeights) > maxGraphAreaSpread
+    Math.max(...graphHeights) - Math.min(...graphHeights) >
+    maxGraphAreaSpread
   ) {
     return false;
   }
 
   const graphWidths = window.map((metrics) => metrics.graphAreaWidth);
   if (
-    Math.max(...graphWidths) - Math.min(...graphWidths) > maxGraphAreaSpread
+    Math.max(...graphWidths) - Math.min(...graphWidths) >
+    maxGraphAreaSpread
   ) {
     return false;
   }

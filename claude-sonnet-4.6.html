@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Force-Directed Graph</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0d0f;
+      color: #e2e2e2;
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #root { width: 100vw; height: 100vh; }
+
+    .app {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #1e1e24;
+      backdrop-filter: blur(12px);
+      background: rgba(13,13,15,0.85);
+      position: relative;
+      z-index: 10;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: #efefef;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: #1e1e28;
+      color: #8888aa;
+      border: 1px solid #2a2a36;
+    }
+    .stats {
+      margin-left: auto;
+      display: flex;
+      gap: 20px;
+      font-size: 12px;
+      color: #555566;
+    }
+    .stats span { color: #8888aa; }
+
+    .canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    svg:active { cursor: grabbing; }
+
+    .link {
+      stroke: #2a2a38;
+      stroke-width: 1px;
+      transition: stroke 0.2s, stroke-opacity 0.2s;
+    }
+    .link.highlighted {
+      stroke: #5b5bff;
+      stroke-opacity: 0.7;
+    }
+    .link.dimmed {
+      stroke-opacity: 0.08;
+    }
+
+    .node circle {
+      stroke-width: 1.5px;
+      transition: r 0.2s, fill 0.2s, stroke 0.2s, filter 0.2s;
+      cursor: pointer;
+    }
+    .node.selected circle {
+      filter: drop-shadow(0 0 8px var(--node-color));
+    }
+    .node.adjacent circle {
+      filter: drop-shadow(0 0 5px var(--node-color));
+    }
+    .node.dimmed circle {
+      opacity: 0.15;
+    }
+    .node.dimmed text { opacity: 0.1; }
+
+    .node text {
+      font-size: 10px;
+      fill: #666680;
+      pointer-events: none;
+      user-select: none;
+      transition: opacity 0.2s;
+    }
+    .node.selected text, .node.adjacent text { fill: #bbbbd0; }
+
+    .tooltip {
+      position: absolute;
+      background: rgba(18,18,24,0.96);
+      border: 1px solid #2a2a3a;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      line-height: 1.6;
+      min-width: 140px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .tooltip-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: #e2e2ee;
+      margin-bottom: 4px;
+    }
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: #66667a;
+    }
+    .tooltip-row span:last-child { color: #9999b8; }
+
+    .hint {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: #333344;
+      display: flex;
+      gap: 16px;
+      pointer-events: none;
+    }
+    .hint span { white-space: nowrap; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useEffect, useRef, useState, useCallback } = React;
+
+// ── Data generation ──────────────────────────────────────────────────────────
+function generateData(n = 100) {
+  const groups = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];
+  const nodes = Array.from({ length: n }, (_, i) => ({
+    id: i,
+    label: `N${i}`,
+    group: Math.floor(Math.random() * groups.length),
+    value: Math.random() * 40 + 6,
+  }));
+
+  const links = [];
+  const added = new Set();
+  // ensure connectivity: chain
+  for (let i = 1; i < n; i++) {
+    links.push({ source: i - 1, target: i });
+    added.add(`${i-1}-${i}`);
+  }
+  // random extra edges
+  const extraCount = Math.floor(n * 1.4);
+  for (let k = 0; k < extraCount; k++) {
+    const s = Math.floor(Math.random() * n);
+    const t = Math.floor(Math.random() * n);
+    const key = s < t ? `${s}-${t}` : `${t}-${s}`;
+    if (s !== t && !added.has(key)) {
+      links.push({ source: s, target: t });
+      added.add(key);
+    }
+  }
+  return { nodes, links };
+}
+
+// ── Color palette ─────────────────────────────────────────────────────────────
+const PALETTE = ['#5b5bff', '#ff5b8a', '#5bffc8', '#ffb35b', '#c85bff'];
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+function App() {
+  const svgRef = useRef(null);
+  const [tooltip, setTooltip] = useState(null); // { x, y, node }
+  const [selected, setSelected] = useState(null);
+  const [adjacentIds, setAdjacentIds] = useState(new Set());
+  const dataRef = useRef(generateData(100));
+  const simRef = useRef(null);
+
+  useEffect(() => {
+    const { nodes, links } = dataRef.current;
+    const svgEl = svgRef.current;
+    const rect = svgEl.getBoundingClientRect();
+    const W = rect.width || window.innerWidth;
+    const H = rect.height || (window.innerHeight - 56);
+
+    const svg = d3.select(svgEl);
+    svg.selectAll('*').remove();
+
+    // ── Zoom ──
+    const g = svg.append('g');
+    const zoom = d3.zoom()
+      .scaleExtent([0.15, 4])
+      .on('zoom', (e) => g.attr('transform', e.transform));
+    svg.call(zoom);
+    svg.call(zoom.transform, d3.zoomIdentity.translate(W / 2, H / 2));
+
+    // ── Simulation ──
+    const sim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id(d => d.id).distance(55).strength(0.4))
+      .force('charge', d3.forceManyBody().strength(-120))
+      .force('center', d3.forceCenter(0, 0))
+      .force('collision', d3.forceCollide(d => d.value + 4));
+    simRef.current = sim;
+
+    // ── Links ──
+    const linkSel = g.append('g').attr('class', 'links')
+      .selectAll('line')
+      .data(links)
+      .join('line')
+      .attr('class', 'link');
+
+    // ── Nodes ──
+    const nodeSel = g.append('g').attr('class', 'nodes')
+      .selectAll('g')
+      .data(nodes)
+      .join('g')
+      .attr('class', 'node');
+
+    nodeSel.append('circle')
+      .attr('r', d => d.value / 2.8 + 5)
+      .attr('fill', d => PALETTE[d.group] + '22')
+      .attr('stroke', d => PALETTE[d.group])
+      .style('--node-color', d => PALETTE[d.group]);
+
+    nodeSel.append('text')
+      .attr('dy', d => -(d.value / 2.8 + 8))
+      .attr('text-anchor', 'middle')
+      .text(d => d.label);
+
+    // ── Drag ──
+    nodeSel.call(
+      d3.drag()
+        .on('start', (e, d) => {
+          if (!e.active) sim.alphaTarget(0.3).restart();
+          d.fx = d.x; d.fy = d.y;
+        })
+        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on('end', (e, d) => {
+          if (!e.active) sim.alphaTarget(0);
+          d.fx = null; d.fy = null;
+        })
+    );
+
+    // ── Hover ──
+    nodeSel
+      .on('mouseenter', (e, d) => {
+        const adjCount = links.filter(l =>
+          (l.source.id ?? l.source) === d.id ||
+          (l.target.id ?? l.target) === d.id
+        ).length;
+        setTooltip({ x: e.clientX, y: e.clientY, node: d, adjCount });
+      })
+      .on('mousemove', (e) => {
+        setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null);
+      })
+      .on('mouseleave', () => setTooltip(null));
+
+    // ── Click ──
+    nodeSel.on('click', (e, d) => {
+      e.stopPropagation();
+      setSelected(prev => {
+        if (prev === d.id) {
+          setAdjacentIds(new Set());
+          return null;
+        }
+        const adj = new Set();
+        links.forEach(l => {
+          const s = l.source.id ?? l.source;
+          const t = l.target.id ?? l.target;
+          if (s === d.id) adj.add(t);
+          if (t === d.id) adj.add(s);
+        });
+        setAdjacentIds(adj);
+        return d.id;
+      });
+    });
+
+    svg.on('click', () => {
+      setSelected(null);
+      setAdjacentIds(new Set());
+    });
+
+    // ── Tick ──
+    sim.on('tick', () => {
+      linkSel
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+      nodeSel.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    return () => sim.stop();
+  }, []);
+
+  // ── Update styles on selection change ──
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const { links } = dataRef.current;
+
+    d3.select(svgEl).selectAll('.node')
+      .classed('selected', d => d.id === selected)
+      .classed('adjacent', d => adjacentIds.has(d.id))
+      .classed('dimmed', d => selected !== null && d.id !== selected && !adjacentIds.has(d.id));
+
+    d3.select(svgEl).selectAll('.link')
+      .classed('highlighted', d => {
+        if (selected === null) return false;
+        const s = d.source.id ?? d.source;
+        const t = d.target.id ?? d.target;
+        return s === selected || t === selected;
+      })
+      .classed('dimmed', d => {
+        if (selected === null) return false;
+        const s = d.source.id ?? d.source;
+        const t = d.target.id ?? d.target;
+        return s !== selected && t !== selected;
+      });
+  }, [selected, adjacentIds]);
+
+  const { nodes, links } = dataRef.current;
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Force-Directed Graph</h1>
+        <span className="badge">D3 v7</span>
+        <div className="stats">
+          <div>{nodes.length} <span>nodes</span></div>
+          <div>{links.length} <span>edges</span></div>
+          {selected !== null && <div style={{color:'#5b5bff'}}>{adjacentIds.size} <span>adjacent</span></div>}
+        </div>
+      </header>
+      <div className="canvas-wrap">
+        <svg ref={svgRef} />
+        {tooltip && (
+          <div
+            className="tooltip"
+            style={{
+              left: tooltip.x + 14,
+              top: tooltip.y - 10,
+            }}
+          >
+            <div className="tooltip-name">{tooltip.node.label}</div>
+            <div className="tooltip-row">
+              <span>Group</span>
+              <span style={{color: PALETTE[tooltip.node.group]}}>
+                {['Alpha','Beta','Gamma','Delta','Epsilon'][tooltip.node.group]}
+              </span>
+            </div>
+            <div className="tooltip-row">
+              <span>Value</span>
+              <span>{tooltip.node.value.toFixed(1)}</span>
+            </div>
+            <div className="tooltip-row">
+              <span>Edges</span>
+              <span>{tooltip.adjCount}</span>
+            </div>
+          </div>
+        )}
+        <div className="hint">
+          <span>scroll — zoom</span>
+          <span>drag — move node</span>
+          <span>click — highlight neighbors</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
