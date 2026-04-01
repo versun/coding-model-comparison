@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Force-Directed Graph</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/d3@7"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+  }
+  #root { height: 100vh; display: flex; flex-direction: column; }
+
+  .header {
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #21262d;
+    background: #0d1117ee;
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+  .header h1 { font-size: 18px; font-weight: 600; color: #e6edf3; letter-spacing: -0.02em; }
+  .header .badge {
+    font-size: 12px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    padding: 3px 10px;
+    border-radius: 20px;
+    color: #8b949e;
+  }
+
+  .chart-wrap { flex: 1; position: relative; cursor: grab; }
+  .chart-wrap:active { cursor: grabbing; }
+  .chart-wrap svg { display: block; width: 100%; height: 100%; }
+
+  .tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: #161b22f0;
+    backdrop-filter: blur(10px);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #e6edf3;
+    box-shadow: 0 8px 24px #0008;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.15s;
+    max-width: 220px;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .tooltip .meta { color: #8b949e; font-size: 12px; line-height: 1.5; }
+
+  .legend {
+    position: fixed; bottom: 18px; right: 22px;
+    background: #161b22d6; border: 1px solid #30363d; border-radius: 10px;
+    padding: 12px 16px; font-size: 12px; color: #8b949e; z-index: 10;
+    backdrop-filter: blur(8px); line-height: 1.8;
+  }
+  .legend kbd {
+    background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+    padding: 0 6px; font-size: 11px; color: #c9d1d9; font-family: inherit;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useCallback, useEffect, useMemo, useRef, useState } = React;
+
+const GROUPS = ["core","auth","data","network","infra","monitoring","compute","storage"];
+const GROUP_COLORS = {
+  core:       "#e06c75",
+  auth:       "#61afef",
+  data:       "#c678dd",
+  network:    "#98c379",
+  infra:      "#e5c07b",
+  monitoring: "#56b6c2",
+  compute:    "#d19a66",
+  storage:    "#abb2bf",
+};
+
+function generateData(n = 100) {
+  const nodes = Array.from({ length: n }, (_, i) => ({
+    id: i,
+    name: `Node-${i}`,
+    group: GROUPS[i % GROUPS.length],
+    weight: Math.round(Math.random() * 99 + 1),
+  }));
+  const links = [];
+  for (let i = 1; i < n; i++) {
+    links.push({ source: i, target: Math.floor(Math.random() * i) });
+    if (Math.random() < 0.25) {
+      links.push({ source: i, target: Math.floor(Math.random() * n) });
+    }
+  }
+  return { nodes, links };
+}
+
+function App() {
+  const containerRef = useRef(null);
+  const svgRef = useRef(null);
+  const [data] = useState(() => generateData(100));
+  const [selected, setSelected] = useState(null);
+  const selectedRef = useRef(null);
+  selectedRef.current = selected;
+
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, node: null });
+  const simRef = useRef(null);
+  const nodeSelectionRef = useRef(null);
+  const linkSelectionRef = useRef(null);
+  const zoomRef = useRef(null);
+
+  // Build adjacency
+  const adjacency = useMemo(() => {
+    const adj = new Map();
+    for (const id of data.nodes.map(d => d.id)) adj.set(id, new Set());
+    for (const l of data.links) {
+      const u = l.source?.id ?? l.source;
+      const v = l.target?.id ?? l.target;
+      adj.get(u).add(v);
+      adj.get(v).add(u);
+    }
+    return adj;
+  }, [data]);
+
+  // Refresh node/link visual styles based on current selection
+  const refreshStyles = useCallback(() => {
+    const nodeSel = nodeSelectionRef.current;
+    const linkSel = linkSelectionRef.current;
+    if (!nodeSel || !linkSel) return;
+
+    const sel = selectedRef.current;
+
+    function baseR(d) { return 5 + Math.sqrt(d.weight) * 0.45; }
+
+    nodeSel.each(function(d) {
+      const circle = d3.select(this);
+      if (sel == null) {
+        circle.attr("opacity", 1).attr("filter", null).attr("stroke-width", 1.5).attr("r", baseR(d));
+        return;
+      }
+      const adjSet = adjacency.get(sel) || new Set();
+      const isSel = d.id === sel;
+      const isNeighbor = adjSet.has(sel) || adjSet.has(d.id); // undirected: check both ways
+      // For undirected, adjacency is symmetric: if sel is in adjacency[d.id], d.id is a neighbor
+      const neighbor = adjacency.get(d.id)?.has(sel);
+      const visible = isSel || neighbor;
+      circle
+        .attr("opacity", visible ? 1 : 0.1)
+        .attr("filter", isSel ? "url(#glow)" : null)
+        .attr("stroke-width", isSel ? 3 : 1.5)
+        .attr("r", isSel ? baseR(d) + 2 : baseR(d));
+    });
+
+    linkSel
+      .attr("stroke", l => {
+        if (sel == null) return "#21262d";
+        const u = l.source?.id ?? l.source;
+        const v = l.target?.id ?? l.target;
+        if (u === sel || v === sel) {
+          const nd = data.nodes.find(n => n.id === u);
+          return nd ? GROUP_COLORS[nd.group] : "#30363d";
+        }
+        return "#21262d";
+      })
+      .attr("stroke-opacity", d => {
+        if (sel == null) return 0.35;
+        const u = d.source?.id ?? d.source;
+        const v = d.target?.id ?? d.target;
+        return (u === sel || v === sel) ? 0.9 : 0.03;
+      });
+  }, [data, adjacency]);
+
+  useEffect(() => {
+    refreshStyles();
+  }, [selected, refreshStyles]);
+
+  useEffect(() => {
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+
+    const defs = svg.append("defs");
+
+    /* arrowheads per group */
+    defs.selectAll("marker").data(GROUPS).join("marker")
+      .attr("id", d => `arrow-${d}`)
+      .attr("viewBox","0 -5 10 10")
+      .attr("refX", 26)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient","auto")
+      .append("path")
+      .attr("d","M0,-4L8,0L0,4z")
+      .attr("fill", d => GROUP_COLORS[d]);
+
+    /* glow filter */
+    const filter = defs.append("filter").attr("id","glow")
+      .attr("x","-50%").attr("y","-50%")
+      .attr("width","200%").attr("height","200%");
+    filter.append("feGaussianBlur").attr("stdDeviation","3").attr("result","blur");
+    const merge = filter.append("feMerge");
+    merge.append("feMergeNode").attr("in","blur");
+    merge.append("feMergeNode").attr("in","SourceGraphic");
+
+    const g = svg.append("g");
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.25, 5])
+      .on("zoom", e => g.attr("transform", e.transform));
+    svg.call(zoom);
+    zoomRef.current = zoom;
+
+    /* links */
+    const link = g.selectAll("line")
+      .data(data.links)
+      .join("line")
+      .attr("stroke", "#21262d")
+      .attr("stroke-width", 0.8)
+      .attr("stroke-opacity", 0.35)
+      .attr("marker-end", d => `url(#arrow-${d.target.group})`);
+    linkSelectionRef.current = link;
+
+    /* nodes */
+    const node = g.selectAll("circle")
+      .data(data.nodes)
+      .join("circle")
+      .attr("r", d => 5 + Math.sqrt(d.weight) * 0.45)
+      .attr("fill", d => GROUP_COLORS[d.group])
+      .attr("stroke", d => d3.color(GROUP_COLORS[d.group]).darker(0.5))
+      .attr("stroke-width", 1.5)
+      .attr("cursor", "pointer");
+    nodeSelectionRef.current = node;
+
+    /* drag */
+    const drag = d3.drag()
+      .on("start", (e, d) => {
+        if (!e.active) simRef.current.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on("end", (e, d) => {
+        if (!e.active) simRef.current.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      });
+    node.call(drag);
+
+    /* tooltip events */
+    node.on("mouseenter", (e, d) => {
+      setTooltip({ visible: true, x: e.clientX + 14, y: e.clientY - 12, node: d });
+    })
+    .on("mousemove", (e) => {
+      setTooltip(t => ({ ...t, x: e.clientX + 14, y: e.clientY - 12 }));
+    })
+    .on("mouseleave", () => {
+      setTooltip({ visible: false, x: 0, y: 0, node: null });
+    });
+
+    /* click highlight */
+    node.on("click", (e, d) => {
+      e.stopPropagation();
+      setSelected(s => s === d.id ? null : d.id);
+    });
+    svg.on("click", () => setSelected(null));
+
+    /* force simulation */
+    const w = window.innerWidth;
+    const h = window.innerHeight - 60;
+    const simulation = d3.forceSimulation(data.nodes)
+      .force("link", d3.forceLink(data.links).id(d => d.id).distance(90).strength(0.45))
+      .force("charge", d3.forceManyBody().strength(-320))
+      .force("center", d3.forceCenter(w / 2, h / 2))
+      .force("collision", d3.forceCollide().radius(d => 8 + d.weight * 0.4));
+    simRef.current = simulation;
+
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+      node
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+      // Also update highlight styles every tick
+      refreshStyles();
+    });
+
+    return () => simulation.stop();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      <div className="header">
+        <h1>Force-Directed Graph</h1>
+        <span className="badge">{data.nodes.length} nodes · {data.links.length} edges</span>
+      </div>
+      <div className="chart-wrap" ref={containerRef}>
+        <svg ref={svgRef}></svg>
+      </div>
+      <div className={`tooltip ${tooltip.visible ? "visible" : ""}`}
+           style={{ left: tooltip.x, top: tooltip.y }}>
+        {tooltip.node && (
+          <>
+            <div className="name" style={{ color: GROUP_COLORS[tooltip.node.group] }}>
+              {tooltip.node.name}
+            </div>
+            <div className="meta">
+              Group: {tooltip.node.group}<br/>
+              Weight: {tooltip.node.weight}<br/>
+              Neighbors: {adjacency.get(tooltip.node.id)?.size ?? 0}
+            </div>
+          </>
+        )}
+      </div>
+      <div className="legend">
+        <div><kbd>Scroll</kbd> Zoom</div>
+        <div><kbd>Click</kbd> Highlight node & neighbors (blank to reset)</div>
+        <div><kbd>Drag</kbd> Reposition node</div>
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -14,6 +14,15 @@ const INDEX_PATH = path.join(ROOT, "index.html");
 const PORT = 4173;
 const CHROME_EXECUTABLE =
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const DESKTOP_VIEWPORT = {
+  width: 1440,
+  height: 900,
+};
+const MOBILE_VIEWPORT = {
+  width: 390,
+  height: 844,
+};
+const INTERACTION_SAMPLE_COUNT = 3;
 
 const TEST_PROMPT = `不要使用任何的mcp和skill，请编写一个单文件的 HTML/JS 应用（不使用构建工具，使用 CDN 引入 React 和 D3.js）。
 功能：
@@ -27,6 +36,22 @@ const TEST_PROMPT = `不要使用任何的mcp和skill，请编写一个单文件
 UI 风格要求现代、极简、暗色模式。`;
 
 const MODELS = [
+  {
+    file: "step-3.5-flash.html",
+    name: "Step 3.5 Flash",
+    runner: "Claude Code",
+    durationText: "41秒",
+    durationSeconds: 41,
+    baseline: false,
+  },
+  {
+    file: "qwen3.6-plus-preview.html",
+    name: "Qwen3.6 Plus Preview",
+    runner: "Claude Code",
+    durationText: "3分 46秒",
+    durationSeconds: 226,
+    baseline: false,
+  },
   {
     file: "gemini-3.1-pro-preview.html",
     name: "Gemini 3.1 Pro Preview",
@@ -210,6 +235,8 @@ function getDefaultDesktopMetrics() {
     nodeCount: 0,
     linkCount: 0,
     targetCircleDomIndex: null,
+    probeCircleDomIndex: null,
+    probeCandidates: [],
     graphAreaHeight: 0,
     graphAreaWidth: 0,
     headingCount: 0,
@@ -230,6 +257,9 @@ function getDefaultTooltipMetrics() {
     textLength: 0,
     richness: 0,
     sample: "",
+    sampleCount: 0,
+    visibleSampleCount: 0,
+    repeatability: 0,
   };
 }
 
@@ -243,6 +273,8 @@ function getDefaultHighlightMetrics() {
     linkOpacityShiftCount: 0,
     dimmedNodes: 0,
     highlightedClassCount: 0,
+    sampleCount: 0,
+    repeatability: 0,
   };
 }
 
@@ -253,6 +285,8 @@ function getDefaultZoomMetrics() {
     afterScale: 1,
     beforeTransform: "",
     afterTransform: "",
+    sampleCount: 0,
+    repeatability: 0,
   };
 }
 
@@ -272,6 +306,39 @@ function getDefaultThemeMetrics() {
     luminance: 255,
     average: { r: 255, g: 255, b: 255 },
   };
+}
+
+function median(values, digits = 0) {
+  const list = values
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+  if (!list.length) {
+    return 0;
+  }
+
+  const middle = Math.floor(list.length / 2);
+  if (list.length % 2 === 1) {
+    return round(list[middle], digits);
+  }
+
+  return round((list[middle - 1] + list[middle]) / 2, digits);
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function getSampleRepeatability(samples, predicate) {
+  if (!samples.length) {
+    return 0;
+  }
+
+  const positiveCount = samples.filter(predicate).length;
+  return round(positiveCount / samples.length, 2);
+}
+
+function cloneDefault(factory) {
+  return JSON.parse(JSON.stringify(factory()));
 }
 
 const RUBRIC = [
@@ -366,32 +433,38 @@ const RUBRIC = [
       {
         key: "tooltipVisible",
         label: "悬停后 Tooltip 可见",
-        points: 6,
+        points: 5,
         detail: "悬停真实节点后出现 Tooltip。",
+      },
+      {
+        key: "tooltipRepeatability",
+        label: "Tooltip 可重复触发",
+        points: 3,
+        detail: "多次独立探测时 Tooltip 能稳定出现，而不是只偶发成功。",
       },
       {
         key: "tooltipLength",
         label: "Tooltip 文本长度",
-        points: 5,
+        points: 4,
         detail: "Tooltip 提供了足够的信息量，而不是只显示一个短标签。",
       },
       {
         key: "tooltipRichness",
         label: "Tooltip 字段丰富度",
-        points: 4,
+        points: 3,
         detail: "Tooltip 中包含多行、多块或多字段信息。",
       },
       {
         key: "tooltipStructure",
         label: "Tooltip 信息结构",
-        points: 4,
+        points: 3,
         detail: "Tooltip 不是单一值，而是能读出多项语义信息。",
       },
       {
         key: "tooltipConsistency",
         label: "Tooltip 探针一致性",
-        points: 1,
-        detail: "页面中存在稳定的 Tooltip 容器或唯一候选。",
+        points: 2,
+        detail: "页面中存在稳定的 Tooltip 容器或明确唯一的候选。",
       },
     ],
   },
@@ -410,7 +483,7 @@ const RUBRIC = [
       {
         key: "nodeSeparation",
         label: "节点层区分",
-        points: 5,
+        points: 4,
         detail: "节点样式在点击后出现充分变化。",
       },
       {
@@ -428,8 +501,14 @@ const RUBRIC = [
       {
         key: "semanticHighlighting",
         label: "高亮语义标记",
-        points: 3,
+        points: 2,
         detail: "存在 highlighted/selected/active 等可识别语义类。",
+      },
+      {
+        key: "highlightRepeatability",
+        label: "高亮响应可重复",
+        points: 2,
+        detail: "多次独立点击探测时，高亮响应能稳定复现。",
       },
     ],
   },
@@ -608,11 +687,170 @@ function sumBreakdownScore(breakdown) {
   );
 }
 
+function resolveStableProbeNodeIndex(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return null;
+  }
+
+  const candidateWeights = new Map();
+
+  for (const metrics of samples) {
+    const probeCandidates = Array.isArray(metrics?.probeCandidates)
+      ? metrics.probeCandidates
+      : [];
+
+    for (const [index, candidate] of probeCandidates.entries()) {
+      if (candidate == null) {
+        continue;
+      }
+
+      const weight = Math.max(probeCandidates.length - index, 1);
+      candidateWeights.set(
+        candidate,
+        (candidateWeights.get(candidate) ?? 0) + weight,
+      );
+    }
+
+    if (probeCandidates.length === 0 && metrics?.targetCircleDomIndex != null) {
+      candidateWeights.set(
+        metrics.targetCircleDomIndex,
+        (candidateWeights.get(metrics.targetCircleDomIndex) ?? 0) + 1,
+      );
+    }
+  }
+
+  const sorted = Array.from(candidateWeights.entries()).sort((left, right) => {
+    if (right[1] !== left[1]) {
+      return right[1] - left[1];
+    }
+
+    return left[0] - right[0];
+  });
+
+  return sorted[0]?.[0] ?? null;
+}
+
+function aggregateTooltipSamples(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return getDefaultTooltipMetrics();
+  }
+
+  const visibleSamples = samples.filter((sample) => sample?.visible);
+
+  return {
+    visible: visibleSamples.length >= Math.ceil(samples.length / 2),
+    count: median(
+      samples.map((sample) => sample?.count ?? 0),
+      0,
+    ),
+    textLength: median(
+      visibleSamples.map((sample) => sample?.textLength ?? 0),
+      0,
+    ),
+    richness: median(
+      visibleSamples.map((sample) => sample?.richness ?? 0),
+      0,
+    ),
+    sample:
+      visibleSamples
+        .map((sample) => sample?.sample ?? "")
+        .sort((left, right) => right.length - left.length)[0] ?? "",
+    sampleCount: samples.length,
+    visibleSampleCount: visibleSamples.length,
+    repeatability: getSampleRepeatability(samples, (sample) => sample?.visible),
+  };
+}
+
+function isMeaningfulHighlightSample(sample) {
+  return Boolean(
+    sample &&
+    (sample.targetChanged ||
+      sample.nodeStyleChanges >= 2 ||
+      sample.linkStyleChanges >= 1 ||
+      sample.highlightedClassCount >= 1),
+  );
+}
+
+function aggregateHighlightSamples(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return getDefaultHighlightMetrics();
+  }
+
+  return {
+    targetChanged:
+      samples.filter((sample) => sample?.targetChanged).length >=
+      Math.ceil(samples.length / 2),
+    nodeStyleChanges: median(
+      samples.map((sample) => sample?.nodeStyleChanges ?? 0),
+      0,
+    ),
+    linkStyleChanges: median(
+      samples.map((sample) => sample?.linkStyleChanges ?? 0),
+      0,
+    ),
+    nodeOpacityShiftCount: median(
+      samples.map((sample) => sample?.nodeOpacityShiftCount ?? 0),
+      0,
+    ),
+    nodeFillShiftCount: median(
+      samples.map((sample) => sample?.nodeFillShiftCount ?? 0),
+      0,
+    ),
+    linkOpacityShiftCount: median(
+      samples.map((sample) => sample?.linkOpacityShiftCount ?? 0),
+      0,
+    ),
+    dimmedNodes: median(
+      samples.map((sample) => sample?.dimmedNodes ?? 0),
+      0,
+    ),
+    highlightedClassCount: median(
+      samples.map((sample) => sample?.highlightedClassCount ?? 0),
+      0,
+    ),
+    sampleCount: samples.length,
+    repeatability: getSampleRepeatability(samples, isMeaningfulHighlightSample),
+  };
+}
+
+function aggregateZoomSamples(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return getDefaultZoomMetrics();
+  }
+
+  const changedSamples = samples.filter((sample) => sample?.changed);
+  const representative =
+    changedSamples.sort(
+      (left, right) =>
+        Math.abs((right?.afterScale ?? 1) - (right?.beforeScale ?? 1)) -
+        Math.abs((left?.afterScale ?? 1) - (left?.beforeScale ?? 1)),
+    )[0] ?? samples[0];
+
+  return {
+    changed: changedSamples.length >= Math.ceil(samples.length / 2),
+    beforeScale: median(
+      samples.map((sample) => sample?.beforeScale ?? 1),
+      2,
+    ),
+    afterScale: median(
+      samples.map((sample) => sample?.afterScale ?? 1),
+      2,
+    ),
+    beforeTransform: representative?.beforeTransform ?? "",
+    afterTransform: representative?.afterTransform ?? "",
+    sampleCount: samples.length,
+    repeatability: getSampleRepeatability(samples, (sample) => sample?.changed),
+  };
+}
+
 function scoreLoadStability(context) {
   const desktop = context.desktop;
+  const probeReady =
+    desktop.probeCircleDomIndex != null || desktop.targetCircleDomIndex != null;
+
   return createBreakdown("loadStability", {
     interactiveSvg: context.renderReady && desktop.svgCount >= 1 ? 4 : 0,
-    targetProbeReady: desktop.targetCircleDomIndex != null ? 1 : 0,
+    targetProbeReady: probeReady ? 1 : 0,
     minimumNodeCoverage: desktop.nodeCount >= 95 ? 1 : 0,
     minimumLinkCoverage: desktop.linkCount >= 60 ? 1 : 0,
     pageErrors: context.pageErrors.length === 0 ? 2 : 0,
@@ -622,6 +860,8 @@ function scoreLoadStability(context) {
 
 function scoreGraphData(context) {
   const desktop = context.desktop;
+  const probeReady =
+    desktop.probeCircleDomIndex != null || desktop.targetCircleDomIndex != null;
   let nodeCountAccuracy = 0;
   if (desktop.nodeCount >= 98 && desktop.nodeCount <= 102) {
     nodeCountAccuracy = 8;
@@ -657,7 +897,7 @@ function scoreGraphData(context) {
   return createBreakdown("graphData", {
     nodeCountAccuracy,
     linkDensity,
-    graphProbeReady: desktop.targetCircleDomIndex != null ? 2 : 0,
+    graphProbeReady: probeReady ? 2 : 0,
     graphHeight,
     graphWidth,
   });
@@ -667,7 +907,7 @@ function scoreTooltip(context) {
   const tooltip = context.tooltip;
   let tooltipLength = 0;
   if (tooltip.textLength >= 56) {
-    tooltipLength = 5;
+    tooltipLength = 4;
   } else if (tooltip.textLength >= 32) {
     tooltipLength = 4;
   } else if (tooltip.textLength >= 12) {
@@ -678,9 +918,9 @@ function scoreTooltip(context) {
 
   let tooltipRichness = 0;
   if (tooltip.richness >= 4) {
-    tooltipRichness = 4;
-  } else if (tooltip.richness >= 2) {
     tooltipRichness = 3;
+  } else if (tooltip.richness >= 2) {
+    tooltipRichness = 2;
   } else if (tooltip.richness >= 1) {
     tooltipRichness = 1;
   }
@@ -692,15 +932,30 @@ function scoreTooltip(context) {
   const tooltipStructure =
     tooltip.visible &&
     (tooltip.richness >= 3 || sampleTokenCount >= 6 || tooltip.textLength >= 40)
-      ? 4
+      ? 3
       : 0;
 
+  let tooltipRepeatability = 0;
+  if (tooltip.repeatability >= 0.99) {
+    tooltipRepeatability = 3;
+  } else if (tooltip.repeatability >= 0.66) {
+    tooltipRepeatability = 2;
+  } else if (tooltip.repeatability >= 0.33) {
+    tooltipRepeatability = 1;
+  }
+
   return createBreakdown("tooltip", {
-    tooltipVisible: tooltip.visible ? 6 : 0,
+    tooltipVisible: tooltip.visible ? 5 : 0,
+    tooltipRepeatability,
     tooltipLength,
     tooltipRichness,
     tooltipStructure,
-    tooltipConsistency: tooltip.visible && tooltip.count >= 1 ? 1 : 0,
+    tooltipConsistency:
+      tooltip.visible && tooltip.count === 1
+        ? 2
+        : tooltip.visible && tooltip.count >= 1
+          ? 1
+          : 0,
   });
 }
 
@@ -708,7 +963,7 @@ function scoreHighlight(context) {
   const highlight = context.highlight;
   let nodeSeparation = 0;
   if (highlight.nodeStyleChanges >= 8) {
-    nodeSeparation = 5;
+    nodeSeparation = 4;
   } else if (highlight.nodeStyleChanges >= 4) {
     nodeSeparation = 3;
   } else if (highlight.nodeStyleChanges >= 2) {
@@ -740,9 +995,16 @@ function scoreHighlight(context) {
 
   let semanticHighlighting = 0;
   if (highlight.highlightedClassCount >= 3) {
-    semanticHighlighting = 3;
+    semanticHighlighting = 2;
   } else if (highlight.highlightedClassCount >= 1) {
     semanticHighlighting = 1;
+  }
+
+  let highlightRepeatability = 0;
+  if (highlight.repeatability >= 0.66) {
+    highlightRepeatability = 2;
+  } else if (highlight.repeatability >= 0.33) {
+    highlightRepeatability = 1;
   }
 
   return createBreakdown("highlight", {
@@ -751,6 +1013,7 @@ function scoreHighlight(context) {
     linkSeparation,
     neighborIsolation,
     semanticHighlighting,
+    highlightRepeatability,
   });
 }
 
@@ -945,6 +1208,7 @@ function isGraphRenderable(metrics) {
 function isStableGraphWindow(samples, options = {}) {
   const {
     windowSize = 3,
+    maxNodeCountSpread = 1,
     maxLinkCountSpread = 2,
     maxTargetStepDistance = 3,
     maxGraphAreaSpread = 4,
@@ -959,16 +1223,12 @@ function isStableGraphWindow(samples, options = {}) {
     return false;
   }
 
-  const targetCircleDomIndex = window[0]?.targetCircleDomIndex;
-  if (targetCircleDomIndex == null) {
+  if (resolveStableProbeNodeIndex(window) == null) {
     return false;
   }
 
-  if (
-    window.some(
-      (metrics) => metrics.targetCircleDomIndex !== targetCircleDomIndex,
-    )
-  ) {
+  const nodeCounts = window.map((metrics) => metrics.nodeCount);
+  if (Math.max(...nodeCounts) - Math.min(...nodeCounts) > maxNodeCountSpread) {
     return false;
   }
 
@@ -1013,6 +1273,126 @@ function hashSeed(input) {
   }
 
   return hash >>> 0;
+}
+
+async function createInstrumentedPage(browser, model, viewport) {
+  const page = await browser.newPage({
+    viewport,
+    deviceScaleFactor: 1,
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  const seed = hashSeed(`coding-model-comparison:${model.file}:v1`);
+  await page.addInitScript(
+    ({ value }) => {
+      let state = value >>> 0;
+      const seededRandom = () => {
+        state = (state + 0x6d2b79f5) >>> 0;
+        let next = Math.imul(state ^ (state >>> 15), 1 | state);
+        next ^= next + Math.imul(next ^ (next >>> 7), 61 | next);
+        return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+      };
+
+      Object.defineProperty(Math, "random", {
+        configurable: true,
+        value: seededRandom,
+        writable: false,
+      });
+    },
+    { value: seed },
+  );
+
+  const pageErrors = [];
+  const consoleErrors = [];
+
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push(message.text());
+    }
+  });
+
+  return {
+    page,
+    pageErrors,
+    consoleErrors,
+  };
+}
+
+async function loadScenario(browser, serverBaseUrl, model, viewport) {
+  const session = await createInstrumentedPage(browser, model, viewport);
+  const url = `${serverBaseUrl}/${model.file}`;
+
+  await session.page.goto(url, { waitUntil: "domcontentloaded" });
+  await session.page
+    .waitForLoadState("networkidle", { timeout: 10_000 })
+    .catch(() => {});
+  await session.page.waitForTimeout(1_500);
+
+  const metrics = await waitForGraph(session.page);
+  const renderReady = Boolean(
+    metrics && metrics.nodeCount >= 50 && metrics.svgCount >= 1,
+  );
+
+  return {
+    ...session,
+    metrics,
+    renderReady,
+  };
+}
+
+async function closeScenario(session) {
+  await session.page.close();
+  return {
+    pageErrors: uniqueStrings(session.pageErrors),
+    consoleErrors: uniqueStrings(session.consoleErrors),
+  };
+}
+
+async function collectRepeatedProbe({
+  browser,
+  serverBaseUrl,
+  model,
+  probe,
+  aggregate,
+  defaultFactory,
+  viewport = DESKTOP_VIEWPORT,
+  sampleCount = INTERACTION_SAMPLE_COUNT,
+}) {
+  const samples = [];
+  const pageErrors = [];
+  const consoleErrors = [];
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const session = await loadScenario(browser, serverBaseUrl, model, viewport);
+
+    try {
+      const probeNodeIndex =
+        session.metrics?.probeCircleDomIndex ??
+        session.metrics?.targetCircleDomIndex ??
+        null;
+
+      const sample = session.renderReady
+        ? await probe(session.page, probeNodeIndex, session.metrics)
+        : cloneDefault(defaultFactory);
+
+      samples.push(sample);
+    } catch (error) {
+      samples.push(cloneDefault(defaultFactory));
+      session.pageErrors.push(`probe:${error.message}`);
+    } finally {
+      const closed = await closeScenario(session);
+      pageErrors.push(...closed.pageErrors);
+      consoleErrors.push(...closed.consoleErrors);
+    }
+  }
+
+  return {
+    aggregated: aggregate(samples),
+    samples,
+    pageErrors: uniqueStrings(pageErrors),
+    consoleErrors: uniqueStrings(consoleErrors),
+  };
 }
 
 async function ensureReportsDir() {
@@ -1083,7 +1463,12 @@ async function waitForGraph(page) {
       }
 
       if (isStableGraphWindow(samples)) {
-        return lastMetrics;
+        return {
+          ...lastMetrics,
+          probeCircleDomIndex:
+            resolveStableProbeNodeIndex(samples) ??
+            lastMetrics.targetCircleDomIndex,
+        };
       }
     } else {
       samples.length = 0;
@@ -1092,7 +1477,15 @@ async function waitForGraph(page) {
     await page.waitForTimeout(250);
   }
 
-  return lastMetrics;
+  if (!lastMetrics) {
+    return lastMetrics;
+  }
+
+  return {
+    ...lastMetrics,
+    probeCircleDomIndex:
+      resolveStableProbeNodeIndex(samples) ?? lastMetrics.targetCircleDomIndex,
+  };
 }
 
 async function collectPageMetrics(page) {
@@ -1186,16 +1579,17 @@ async function collectPageMetrics(page) {
     const viewportCenterX = viewportWidth / 2;
     const viewportCenterY = viewportHeight / 2;
 
-    const targetCircle =
-      visibleCircles
-        .map((circle) => ({
-          ...circle,
-          distance:
-            (circle.cx - viewportCenterX) ** 2 +
-            (circle.cy - viewportCenterY) ** 2 -
-            circle.radius * 12,
-        }))
-        .sort((left, right) => left.distance - right.distance)[0] ?? null;
+    const rankedCircles = visibleCircles
+      .map((circle) => ({
+        ...circle,
+        distance:
+          (circle.cx - viewportCenterX) ** 2 +
+          (circle.cy - viewportCenterY) ** 2 -
+          circle.radius * 12,
+      }))
+      .sort((left, right) => left.distance - right.distance);
+
+    const targetCircle = rankedCircles[0] ?? null;
 
     const zoomCandidates = Array.from(document.querySelectorAll("svg g"))
       .map((element, domIndex) => {
@@ -1300,6 +1694,10 @@ async function collectPageMetrics(page) {
       nodeCount: visibleCircles.length,
       linkCount: lines.length,
       targetCircleDomIndex: targetCircle?.domIndex ?? null,
+      probeCircleDomIndex: targetCircle?.domIndex ?? null,
+      probeCandidates: rankedCircles
+        .slice(0, 5)
+        .map((circle) => circle.domIndex),
       targetCircleBox: targetCircle
         ? {
             x: targetCircle.x,
@@ -1530,6 +1928,8 @@ async function probeHighlight(page, nodeIndex) {
     };
   }
 
+  await page.mouse.move(12, 12);
+  await page.waitForTimeout(120);
   await page.mouse.click(
     targetBox.x + targetBox.width / 2,
     targetBox.y + targetBox.height / 2,
@@ -1747,7 +2147,9 @@ function createNotes(context) {
   }
 
   if (context.tooltip.visible) {
-    notes.push(`Tooltip 文本长度 ${context.tooltip.textLength}`);
+    notes.push(
+      `Tooltip 文本长度 ${context.tooltip.textLength}，${context.tooltip.visibleSampleCount}/${Math.max(context.tooltip.sampleCount, 1)} 次可见`,
+    );
   } else {
     notes.push("未检测到可见 Tooltip");
   }
@@ -1757,7 +2159,7 @@ function createNotes(context) {
     context.highlight.linkStyleChanges
   ) {
     notes.push(
-      `点击后节点变化 ${context.highlight.nodeStyleChanges}，边变化 ${context.highlight.linkStyleChanges}`,
+      `点击后节点变化 ${context.highlight.nodeStyleChanges}，边变化 ${context.highlight.linkStyleChanges}，重复性 ${round(context.highlight.repeatability * 100, 0)}%`,
     );
   } else {
     notes.push("点击后未观察到足够明显的邻接高亮变化");
@@ -1779,91 +2181,92 @@ function createNotes(context) {
 }
 
 async function evaluateModel(browser, serverBaseUrl, model) {
-  const page = await browser.newPage({
-    viewport: {
-      width: 1440,
-      height: 900,
-    },
-    deviceScaleFactor: 1,
-  });
-  await page.emulateMedia({ reducedMotion: "reduce" });
+  let desktop = getDefaultDesktopMetrics();
+  let renderReady = false;
+  let theme = getDefaultThemeMetrics();
+  let desktopErrors = {
+    pageErrors: [],
+    consoleErrors: [],
+  };
 
-  const seed = hashSeed(`coding-model-comparison:${model.file}:v1`);
-  await page.addInitScript(
-    ({ value }) => {
-      let state = value >>> 0;
-      const seededRandom = () => {
-        state = (state + 0x6d2b79f5) >>> 0;
-        let next = Math.imul(state ^ (state >>> 15), 1 | state);
-        next ^= next + Math.imul(next ^ (next >>> 7), 61 | next);
-        return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
-      };
-
-      Object.defineProperty(Math, "random", {
-        configurable: true,
-        value: seededRandom,
-        writable: false,
-      });
-    },
-    { value: seed },
+  const desktopSession = await loadScenario(
+    browser,
+    serverBaseUrl,
+    model,
+    DESKTOP_VIEWPORT,
   );
 
-  const pageErrors = [];
-  const consoleErrors = [];
+  try {
+    desktop = desktopSession.metrics ?? getDefaultDesktopMetrics();
+    renderReady = desktopSession.renderReady;
+    theme = await screenshotTheme(desktopSession.page);
+  } finally {
+    desktopErrors = await closeScenario(desktopSession);
+  }
 
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  page.on("console", (message) => {
-    if (message.type() === "error") {
-      consoleErrors.push(message.text());
-    }
+  const tooltipRun = await collectRepeatedProbe({
+    browser,
+    serverBaseUrl,
+    model,
+    probe: (page, probeNodeIndex) => probeTooltip(page, probeNodeIndex),
+    aggregate: aggregateTooltipSamples,
+    defaultFactory: getDefaultTooltipMetrics,
   });
 
-  const url = `${serverBaseUrl}/${model.file}`;
-  await page.goto(url, { waitUntil: "domcontentloaded" });
-  await page
-    .waitForLoadState("networkidle", { timeout: 10_000 })
-    .catch(() => {});
-  await page.waitForTimeout(1_500);
+  const highlightRun = await collectRepeatedProbe({
+    browser,
+    serverBaseUrl,
+    model,
+    probe: (page, probeNodeIndex) => probeHighlight(page, probeNodeIndex),
+    aggregate: aggregateHighlightSamples,
+    defaultFactory: getDefaultHighlightMetrics,
+  });
 
-  const desktop = await waitForGraph(page);
-  const renderReady = Boolean(
-    desktop && desktop.nodeCount >= 50 && desktop.svgCount >= 1,
+  const zoomRun = await collectRepeatedProbe({
+    browser,
+    serverBaseUrl,
+    model,
+    probe: (page) => probeZoom(page),
+    aggregate: aggregateZoomSamples,
+    defaultFactory: getDefaultZoomMetrics,
+  });
+
+  let mobile = getDefaultMobileMetrics();
+  let mobileErrors = {
+    pageErrors: [],
+    consoleErrors: [],
+  };
+
+  const mobileSession = await loadScenario(
+    browser,
+    serverBaseUrl,
+    model,
+    MOBILE_VIEWPORT,
   );
-  const tooltip = renderReady
-    ? await probeTooltip(page, desktop.targetCircleDomIndex)
-    : {
-        visible: false,
-        count: 0,
-        textLength: 0,
-        richness: 0,
-        sample: "",
-      };
-  const highlight = renderReady
-    ? await probeHighlight(page, desktop.targetCircleDomIndex)
-    : {
-        targetChanged: false,
-        nodeStyleChanges: 0,
-        linkStyleChanges: 0,
-        nodeOpacityShiftCount: 0,
-        nodeFillShiftCount: 0,
-        linkOpacityShiftCount: 0,
-        dimmedNodes: 0,
-        highlightedClassCount: 0,
-      };
-  const zoom = renderReady
-    ? await probeZoom(page)
-    : { changed: false, beforeScale: 1, afterScale: 1 };
-  const theme = await screenshotTheme(page);
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await page
-    .waitForLoadState("networkidle", { timeout: 10_000 })
-    .catch(() => {});
-  await page.waitForTimeout(1_500);
-  const mobile = await waitForGraph(page);
+  try {
+    mobile = mobileSession.metrics ?? getDefaultMobileMetrics();
+  } finally {
+    mobileErrors = await closeScenario(mobileSession);
+  }
 
-  await page.close();
+  const tooltip = tooltipRun.aggregated;
+  const highlight = highlightRun.aggregated;
+  const zoom = zoomRun.aggregated;
+  const pageErrors = uniqueStrings([
+    ...desktopErrors.pageErrors,
+    ...tooltipRun.pageErrors,
+    ...highlightRun.pageErrors,
+    ...zoomRun.pageErrors,
+    ...mobileErrors.pageErrors,
+  ]);
+  const consoleErrors = uniqueStrings([
+    ...desktopErrors.consoleErrors,
+    ...tooltipRun.consoleErrors,
+    ...highlightRun.consoleErrors,
+    ...zoomRun.consoleErrors,
+    ...mobileErrors.consoleErrors,
+  ]);
 
   const scorecard = buildScorecard({
     renderReady,
@@ -2482,4 +2885,26 @@ async function main() {
   }
 }
 
-await main();
+function isEntrypoint() {
+  if (!process.argv[1]) {
+    return false;
+  }
+
+  return path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+}
+
+if (isEntrypoint()) {
+  await main();
+}
+
+export {
+  RUBRIC,
+  aggregateHighlightSamples,
+  aggregateTooltipSamples,
+  aggregateZoomSamples,
+  buildScorecard,
+  getRubricTotalPoints,
+  isGraphRenderable,
+  isStableGraphWindow,
+  resolveStableProbeNodeIndex,
+};
