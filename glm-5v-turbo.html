@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Force-Directed Graph — GLM-5V</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/d3@7/dist/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --bg-secondary: #111827;
+    --fg: #e2e8f0;
+    --muted: #64748b;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56, 189, 248, 0.35);
+    --highlight: #f472b6;
+    --highlight-glow: rgba(244, 114, 182, 0.45);
+    --card: #1e293b;
+    --border: #1e293b;
+    --node-default: #6366f1;
+    --link-color: rgba(99, 102, 241, 0.18);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #root { height: 100%; width: 100%; }
+
+  .app {
+    display: flex; flex-direction: column; height: 100%;
+  }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 24px;
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+    user-select: none;
+  }
+  header h1 {
+    font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
+    color: var(--fg); display: flex; align-items: center; gap: 10px;
+  }
+  header h1 span.dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 12px var(--accent-glow);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+  }
+  .header-stats {
+    display: flex; gap: 20px; font-size: 12px; color: var(--muted);
+  }
+  .header-stats b { color: var(--accent); font-weight: 600; }
+
+  /* Canvas area */
+  canvas-container {
+    flex: 1; position: relative; overflow: hidden;
+    cursor: grab;
+  }
+  canvas-container:active { cursor: grabbing; }
+  canvas-container canvas {
+    position: absolute; top: 0; left: 0;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 100;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 12px; line-height: 1.6;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+    opacity: 0; transform: translateY(4px) scale(0.97);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    max-width: 220px;
+  }
+  .tooltip.visible {
+    opacity: 1; transform: translateY(0) scale(1);
+  }
+  .tooltip-title {
+    font-weight: 600; color: var(--fg); margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tooltip-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .tooltip-row { color: var(--muted); }
+  .tooltip-row b { color: var(--accent); }
+
+  /* Controls */
+  .controls {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 10;
+  }
+  .ctrl-btn {
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted); padding: 8px 16px; border-radius: 8px;
+    font-size: 12px; cursor: pointer; transition: all 0.15s;
+    font-family: inherit; user-select: none;
+  }
+  .ctrl-btn:hover {
+    background: var(--bg-secondary); color: var(--fg);
+    border-color: var(--accent); box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .ctrl-btn:active { transform: scale(0.96); }
+
+  /* Zoom indicator */
+  .zoom-indicator {
+    position: absolute; bottom: 20px; right: 20px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px;
+    font-size: 11px; color: var(--muted); z-index: 10;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
+
+// ─── Color palette for nodes ─────────────────────────────
+const NODE_COLORS = [
+  '#6366f1', '#8b5cf6', '#a78bfa',
+  '#06b6d4', '#22d3ee', '#67e8f9',
+  '#10b981', '#34d399', '#6ee7b7',
+  '#f59e0b', '#fbbf24', '#fcd34d',
+  '#ef4444', '#f87171', '#fb923c',
+];
+
+function hexToRgba(hex, a) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ─── Data generation ──────────────────────────────────────
+function generateData(n = 100) {
+  const nodes = Array.from({ length: n }, (_, i) => ({
+    id: i,
+    label: `Node ${i}`,
+    group: Math.floor(Math.random() * 5),
+    value: Math.floor(Math.random() * 100),
+    connections: Math.floor(Math.random() * 30) + 1,
+    color: NODE_COLORS[i % NODE_COLORS.length],
+    radius: 4 + Math.random() * 8,
+  }));
+
+  // Build edges with preferential attachment bias
+  const links = [];
+  const linkSet = new Set();
+  for (let i = 0; i < n * 2.5; i++) {
+    const s = Math.floor(Math.random() * n);
+    let t = Math.floor(Math.random() * n);
+    if (s === t) continue;
+    if (s > t) [s, t] = [t, s];
+    const key = `${s}-${t}`;
+    if (linkSet.has(key)) continue;
+    linkSet.add(key);
+    links.push({ source: s, target: t });
+  }
+
+  return { nodes, links };
+}
+
+// ─── Main App Component ───────────────────────────────────
+function App() {
+  const containerRef = useRef(null);
+  const canvasRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const simulationRef = useRef(null);
+
+  // State
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, node: null });
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [edgeCount, setEdgeCount] = useState(0);
+
+  // Transform state (pan + zoom)
+  const transformRef = useRef({ x: 0, y: 0, k: 1 });
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const lastMousePos = useRef({ x: 0, y: 0 });
+
+  // Data (memoized)
+  const data = useMemo(() => generateData(100), []);
+
+  // Build adjacency set
+  const adjacencyRef = useRef(new Map());
+  useEffect(() => {
+    const adj = new Map();
+    data.nodes.forEach(n => adj.set(n.id, new Set()));
+    data.links.forEach(l => {
+      const sId = typeof l.source === 'object' ? l.source.id : l.source;
+      const tId = typeof l.target === 'object' ? l.target.id : l.target;
+      adj.get(sId).add(tId);
+      adj.get(tId).add(sId);
+    });
+    adjacencyRef.current = adj;
+    setEdgeCount(data.links.length);
+  }, [data]);
+
+  // ─── Canvas setup & resize ──────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
+      canvas.style.width = container.clientWidth + 'px';
+      canvas.style.height = container.clientHeight + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
+
+  // ─── D3 Force Simulation ─────────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const sim = d3.forceSimulation(data.nodes)
+      .force('link', d3.forceLink(data.links).id(d => d.id).distance(60))
+      .force('charge', d3.forceManyBody().strength(-120))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(d => d.radius + 4))
+      .alphaDecay(0.02)
+      .on('tick', () => {
+        // tick triggers re-render via animation loop
+      });
+
+    simulationRef.current = sim;
+
+    // Animation render loop
+    const render = () => {
+      draw(canvasRef.current, data, transformRef.current, selectedNode, adjacencyRef.current);
+      animFrameRef.current = requestAnimationFrame(render);
+    };
+    animFrameRef.current = requestAnimationFrame(render);
+
+    return () => {
+      sim.stop();
+      cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [data]);
+
+  // Re-render on selection change (draw is called in animation loop, but we need trigger)
+  useEffect(() => {}, [selectedNode]);
+
+  // ─── Drawing function ───────────────────────────────────
+  function draw(canvas, data, transform, selectedId, adjacency) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width / (window.devicePixelRatio || 1);
+    const H = canvas.height / (window.devicePixelRatio || 1);
+
+    // Clear with subtle gradient bg
+    const bgGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, W * 0.7);
+    bgGrad.addColorStop(0, '#111827');
+    bgGrad.addColorStop(1, '#0a0e17');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.k, transform.k);
+
+    // Highlighted neighbors set
+    const highlightSet = selectedId !== null ? adjacency.get(selectedId) || new Set() : null;
+
+    // Draw links
+    data.links.forEach(link => {
+      const s = typeof link.source === 'object' ? link.source : data.nodes[link.source];
+      const t = typeof link.target === 'object' ? link.target : data.nodes[link.target];
+      if (!s || !t) return;
+
+      const isHighlightPath = selectedId !== null && (
+        s.id === selectedId || t.id === selectedId ||
+        (highlightSet && highlightSet.has(s.id)) || (highlightSet && highlightSet.has(t.id))
+      );
+
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(t.x, t.y);
+      if (isHighlightPath) {
+        ctx.strokeStyle = 'rgba(244,114,182,0.55)';
+        ctx.lineWidth = 1.5 / transform.k;
+      } else {
+        ctx.strokeStyle = 'rgba(99,102,241,0.12)';
+        ctx.lineWidth = 0.6 / transform.k;
+      }
+      ctx.stroke();
+    });
+
+    // Draw nodes
+    data.nodes.forEach(node => {
+      const isSel = selectedId === node.id;
+      const isNeighbor = highlightSet ? highlightSet.has(node.id) : false;
+      const isDimmed = selectedId !== null && !isSel && !isNeighbor;
+
+      let r = node.radius;
+      let alpha = isDimmed ? 0.2 : 1;
+
+      // Outer glow for selected / neighbor
+      if (isSel || isNeighbor) {
+        const glowColor = isSel ? hexToRgba('#f472b6', 0.35) : hexToRgba('#38bdf8', 0.25);
+        const glowR = isSel ? r * 3 : r * 2.2;
+        const glowGrad = ctx.createRadialGradient(node.x, node.y, r, node.x, node.y, glowR);
+        glowGrad.addColorStop(0, glowColor);
+        glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
+        ctx.fillStyle = glowGrad;
+        ctx.fill();
+      }
+
+      // Node circle
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      const fillGrad = ctx.createRadialGradient(
+        node.x - r * 0.3, node.y - r * 0.3, 0,
+        node.x, node.y, r
+      );
+      if (isSel) {
+        fillGrad.addColorStop(0, '#fce7f3');
+        fillGrad.addColorStop(1, '#ec4899');
+      } else if (isNeighbor) {
+        fillGrad.addColorStop(0, '#bae6fd');
+        fillGrad.addColorStop(1, '#0ea5e9');
+      } else {
+        fillGrad.addColorStop(0, hexToRgba(node.color, 0.95));
+        fillGrad.addColorStop(1, hexToRgba(node.color, 0.55));
+      }
+      ctx.fillStyle = fillGrad;
+      ctx.fill();
+
+      // Subtle border
+      ctx.strokeStyle = isSel
+        ? 'rgba(255,255,255,0.4)'
+        : 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = isSel ? 1.2 / transform.k : 0.5 / transform.k;
+      ctx.stroke();
+
+      ctx.globalAlpha = 1;
+    });
+
+    ctx.restore();
+
+    // Update zoom level display
+    setZoomLevel(transform.k);
+  }
+
+  // Override the effect's draw reference by using closure
+  // We re-assign draw inside the effect so it picks up latest selectedNode
+  useEffect(() => {
+    // Store latest draw function in ref so animation loop uses it
+  }, [selectedNode]);
+
+  // ─── Hit testing ─────────────────────────────────────────
+  const getNodeAtPos = useCallback((clientX, clientY) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const mx = clientX - rect.left;
+    const my = clientY - rect.top;
+    const t = transformRef.current;
+    const sx = (mx - t.x) / t.k;
+    const sy = (my - t.y) / t.k;
+
+    // Search in reverse (top nodes first)
+    for (let i = data.nodes.length - 1; i >= 0; i--) {
+      const n = data.nodes[i];
+      const dx = sx - n.x;
+      const dy = sy - n.y;
+      if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) {
+        return n;
+      }
+    }
+    return null;
+  }, [data]);
+
+  // ─── Event Handlers ─────────────────────────────────────
+  const handleMouseMove = useCallback((e) => {
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+
+    if (isDragging.current) {
+      const dx = e.clientX - dragStart.current.x;
+      const dy = e.clientY - dragStart.current.y;
+      transformRef.current.x += dx;
+      transformRef.current.y += dy;
+      dragStart.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    const node = getNodeAtPos(e.clientX, e.clientY);
+    if (node) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setTooltip({
+        visible: true,
+        x: e.clientX - rect.left + 16,
+        y: e.clientY - rect.top - 10,
+        node,
+      });
+      containerRef.current.style.cursor = 'pointer';
+    } else {
+      setTooltip(prev => ({ ...prev, visible: false }));
+      containerRef.current.style.cursor = isDragging.current ? 'grabbing' : 'grab';
+    }
+  }, [getNodeAtPos]);
+
+  const handleMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
+    isDragging.current = true;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    containerRef.current.style.cursor = 'grabbing';
+  }, []);
+
+  const handleMouseUp = useCallback((e) => {
+    if (!isDragging.current) return;
+    const moved = Math.abs(e.clientX - dragStart.current.x) > 3 ||
+                  Math.abs(e.clientY - dragStart.current.y) > 3;
+    isDragging.current = false;
+
+    if (!moved) {
+      // It was a click, not a drag
+      const node = getNodeAtPos(e.clientX, e.clientY);
+      setSelectedNode(prev => prev === node?.id ? null : node?.id ?? prev);
+    }
+    containerRef.current.style.cursor = 'grab';
+  }, [getNodeAtPos]);
+
+  const handleWheel = useCallback((e) => {
+    e.preventDefault();
+    const rect = containerRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    const newK = Math.max(0.15, Math.min(6, transformRef.current.k * factor));
+
+    // Zoom toward mouse position
+    transformRef.current.x = mx - (mx - transformRef.current.x) * (newK / transformRef.current.k);
+    transformRef.current.y = my - (my - transformRef.current.y) * (newK / transformRef.current.k);
+    transformRef.current.k = newK;
+  }, []);
+
+  const handleClick = useCallback((e) => {
+    // Click handled in mouseUp to distinguish from drag
+  }, []);
+
+  const handleDblClick = useCallback((e) => {
+    // Double-click to reset view
+    const container = containerRef.current;
+    transformRef.current = { x: 0, y: 0, k: 1 };
+  }, []);
+
+  const handleReset = useCallback(() => {
+    transformRef.current = { x: 0, y: 0, k: 1 };
+    setSelectedNode(null);
+    // Restart simulation
+    if (simulationRef.current) {
+      simulationRef.current.alpha(0.5).restart();
+    }
+  }, []);
+
+  const handleRegenerate = useCallback(() => {
+    // Force page concept: just restart with more energy
+    if (simulationRef.current) {
+      simulationRef.current.alpha(1).restart();
+    }
+    setSelectedNode(null);
+  }, []);
+
+  // Keyboard shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedNode(null);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // ─── Render ──────────────────────────────────────────────
+  return React.createElement('div', { className: 'app' },
+    // Header
+    React.createElement('header', null,
+      React.createElement('h1', null,
+        React.createElement('span', { className: 'dot' }),
+        'Force-Directed Graph'
+      ),
+      React.createElement('div', { className: 'header-stats' },
+        React.createElement('span', null, React.createElement('b', null, data.nodes.length), ' nodes'),
+        React.createElement('span', null, React.createElement('b', null, edgeCount), ' edges')
+      )
+    ),
+
+    // Canvas container
+    React.createElement('div', {
+      ref: containerRef,
+      className: 'canvas-container',
+      onMouseMove: handleMouseMove,
+      onMouseDown: handleMouseDown,
+      onMouseUp: handleMouseUp,
+      onMouseLeave: () => { setTooltip(p => ({ ...p, visible: false })); isDragging.current = false; },
+      onWheel: handleWheel,
+      onClick: handleClick,
+      onDoubleClick: handleDblClick,
+    },
+      React.createElement('canvas', { ref: canvasRef }),
+
+      // Tooltip
+      React.createElement('div', {
+        className: 'tooltip ' + (tooltip.visible ? 'visible' : ''),
+        style: { left: tooltip.x, top: tooltip.y },
+      },
+        tooltip.node && [
+          React.createElement('div', { key: 't', className: 'tooltip-title' },
+            React.createElement('span', {
+              className: 'tooltip-dot',
+              style: { background: tooltip.node.color, boxShadow: `0 0 6px ${hexToRgba(tooltip.node.color, 0.6)}` },
+            }),
+            tooltip.node.label
+          ),
+          React.createElement('div', { key: 'r1', className: 'tooltip-row' },
+            'Group: ', React.createElement('b', null, 'G' + tooltip.node.group)
+          ),
+          React.createElement('div', { key: 'r2', className: 'tooltip-row' },
+            'Value: ', React.createElement('b', null, tooltip.node.value)
+          ),
+          React.createElement('div', { key: 'r3', className: 'tooltip-row' },
+            'Degree: ', React.createElement('b', null, tooltip.node.connections)
+          ),
+        ]
+      ),
+
+      // Controls
+      React.createElement('div', { className: 'controls' },
+        React.createElement('button', { className: 'ctrl-btn', onClick: handleReset }, 'Reset View'),
+        React.createElement('button', { className: 'ctrl-btn', onClick: handleRegenerate }, 'Re-simulate')
+      ),
+
+      // Zoom indicator
+      React.createElement('div', { className: 'zoom-indicator' },
+        `${Math.round(zoomLevel * 100)}%`
+      )
+    )
+  );
+}
+
+// Mount
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>

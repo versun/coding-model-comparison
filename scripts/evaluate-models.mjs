@@ -37,6 +37,14 @@ UI 风格要求现代、极简、暗色模式。`;
 
 const MODELS = [
   {
+    file: "glm-5v-turbo.html",
+    name: "GLM 5V Turbo",
+    runner: "Claude Code",
+    durationText: "59秒",
+    durationSeconds: 59,
+    baseline: false,
+  },
+  {
     file: "step-3.5-flash.html",
     name: "Step 3.5 Flash",
     runner: "Claude Code",
@@ -181,6 +189,207 @@ function formatTimestamp(date) {
   const parts = formatter.formatToParts(date);
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}:${map.second} CST`;
+}
+
+function formatEvaluationProgress({ current, total, modelName, stage }) {
+  return `${current}/${total} | 模型: ${modelName} | 项目: ${stage}`;
+}
+
+function formatPendingProgress({ current, total, modelName }) {
+  return formatEvaluationProgress({
+    current,
+    total,
+    modelName: modelName ?? `模型 ${current}`,
+    stage: "等待中",
+  });
+}
+
+function parsePositiveInteger(value, optionName) {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${optionName} must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
+function parseCliOptions(argv = process.argv.slice(2)) {
+  let parallel = 1;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+
+    if (argument === "--parallel" || argument === "-p") {
+      const value = argv[index + 1];
+
+      if (value == null) {
+        throw new Error(`${argument} requires a value.`);
+      }
+
+      parallel = parsePositiveInteger(value, argument);
+      index += 1;
+      continue;
+    }
+
+    if (argument.startsWith("--parallel=")) {
+      parallel = parsePositiveInteger(
+        argument.slice("--parallel=".length),
+        "--parallel",
+      );
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${argument}`);
+  }
+
+  return { parallel };
+}
+
+function createProgressReporter({
+  total,
+  interactive = Boolean(process.stdout?.isTTY),
+  multiLine = false,
+  modelNames = [],
+  write = (chunk) => process.stdout.write(chunk),
+}) {
+  const useMultiLine = interactive && multiLine;
+  let currentLineWidth = 0;
+  let renderedLineCount = 0;
+  let rendered = false;
+  const lines = useMultiLine
+    ? Array.from({ length: total }, (_, index) =>
+        formatPendingProgress({
+          current: index + 1,
+          total,
+          modelName: modelNames[index],
+        }),
+      )
+    : [];
+
+  function emit(line, { persist = false } = {}) {
+    if (useMultiLine) {
+      if (rendered) {
+        write("\r");
+        if (renderedLineCount > 1) {
+          write(`\x1b[${renderedLineCount - 1}A`);
+        }
+      }
+
+      for (const [index, currentLine] of lines.entries()) {
+        write("\x1b[2K");
+        write(currentLine);
+        if (index < lines.length - 1) {
+          write("\n");
+        }
+      }
+
+      rendered = true;
+      renderedLineCount = lines.length;
+      return;
+    }
+
+    if (interactive) {
+      const paddedLine = line.padEnd(currentLineWidth, " ");
+      write(`\r${paddedLine}`);
+      currentLineWidth = Math.max(currentLineWidth, line.length);
+
+      if (persist) {
+        write("\n");
+        currentLineWidth = 0;
+      }
+
+      return;
+    }
+
+    write(`${line}\n`);
+  }
+
+  return {
+    update({ current, modelName, stage }) {
+      const line = formatEvaluationProgress({
+        current,
+        total,
+        modelName,
+        stage,
+      });
+
+      if (useMultiLine) {
+        lines[current - 1] = line;
+      }
+
+      emit(line);
+    },
+    finish({ current, modelName, totalScore }) {
+      const line = formatEvaluationProgress({
+        current,
+        total,
+        modelName,
+        stage: `完成 ${totalScore} 分`,
+      });
+
+      if (useMultiLine) {
+        lines[current - 1] = line;
+      }
+
+      emit(line, { persist: true });
+    },
+    fail({ current, modelName }) {
+      const line = formatEvaluationProgress({
+        current,
+        total,
+        modelName,
+        stage: "失败",
+      });
+
+      if (useMultiLine) {
+        lines[current - 1] = line;
+      }
+
+      emit(line, { persist: true });
+    },
+    close() {
+      if (useMultiLine && rendered) {
+        write("\n");
+      }
+    },
+  };
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  const limit = Math.min(
+    items.length,
+    parsePositiveInteger(concurrency, "parallel"),
+  );
+  let nextIndex = 0;
+  let firstError = null;
+
+  async function runNext() {
+    while (!firstError) {
+      const currentIndex = nextIndex;
+      if (currentIndex >= items.length) {
+        return;
+      }
+
+      nextIndex += 1;
+
+      try {
+        results[currentIndex] = await worker(items[currentIndex], currentIndex);
+      } catch (error) {
+        firstError = error;
+        return;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: limit }, () => runNext()));
+
+  if (firstError) {
+    throw firstError;
+  }
+
+  return results;
 }
 
 function luminance(rgb) {
@@ -2180,7 +2389,12 @@ function createNotes(context) {
   return notes;
 }
 
-async function evaluateModel(browser, serverBaseUrl, model) {
+async function evaluateModel(
+  browser,
+  serverBaseUrl,
+  model,
+  onProgress = () => {},
+) {
   let desktop = getDefaultDesktopMetrics();
   let renderReady = false;
   let theme = getDefaultThemeMetrics();
@@ -2189,6 +2403,7 @@ async function evaluateModel(browser, serverBaseUrl, model) {
     consoleErrors: [],
   };
 
+  onProgress("桌面端");
   const desktopSession = await loadScenario(
     browser,
     serverBaseUrl,
@@ -2204,6 +2419,7 @@ async function evaluateModel(browser, serverBaseUrl, model) {
     desktopErrors = await closeScenario(desktopSession);
   }
 
+  onProgress("Tooltip");
   const tooltipRun = await collectRepeatedProbe({
     browser,
     serverBaseUrl,
@@ -2213,6 +2429,7 @@ async function evaluateModel(browser, serverBaseUrl, model) {
     defaultFactory: getDefaultTooltipMetrics,
   });
 
+  onProgress("邻接高亮");
   const highlightRun = await collectRepeatedProbe({
     browser,
     serverBaseUrl,
@@ -2222,6 +2439,7 @@ async function evaluateModel(browser, serverBaseUrl, model) {
     defaultFactory: getDefaultHighlightMetrics,
   });
 
+  onProgress("滚轮缩放");
   const zoomRun = await collectRepeatedProbe({
     browser,
     serverBaseUrl,
@@ -2237,6 +2455,7 @@ async function evaluateModel(browser, serverBaseUrl, model) {
     consoleErrors: [],
   };
 
+  onProgress("移动端");
   const mobileSession = await loadScenario(
     browser,
     serverBaseUrl,
@@ -2268,6 +2487,7 @@ async function evaluateModel(browser, serverBaseUrl, model) {
     ...mobileErrors.consoleErrors,
   ]);
 
+  onProgress("评分汇总");
   const scorecard = buildScorecard({
     renderReady,
     pageErrors,
@@ -2816,7 +3036,8 @@ function buildIndexHtml(results, generatedAt) {
 </html>`;
 }
 
-async function main() {
+async function main(argv = process.argv.slice(2)) {
+  const { parallel } = parseCliOptions(argv);
   await ensureReportsDir();
   const server = await startStaticServer(ROOT, PORT);
   const browser = await chromium.launch({
@@ -2826,11 +3047,52 @@ async function main() {
 
   try {
     const baseUrl = `http://127.0.0.1:${PORT}`;
-    const results = [];
+    const progress = createProgressReporter({
+      total: MODELS.length,
+      interactive: Boolean(process.stdout?.isTTY),
+      multiLine: parallel > 1,
+      modelNames: MODELS.map((model) => model.name),
+    });
+    let results;
 
-    for (const model of MODELS) {
-      const result = await evaluateModel(browser, baseUrl, model);
-      results.push(result);
+    try {
+      results = await mapWithConcurrency(
+        MODELS,
+        parallel,
+        async (model, index) => {
+          const current = index + 1;
+
+          try {
+            const result = await evaluateModel(
+              browser,
+              baseUrl,
+              model,
+              (stage) => {
+                progress.update({
+                  current,
+                  modelName: model.name,
+                  stage,
+                });
+              },
+            );
+
+            progress.finish({
+              current,
+              modelName: model.name,
+              totalScore: result.totalScore,
+            });
+            return result;
+          } catch (error) {
+            progress.fail({
+              current,
+              modelName: model.name,
+            });
+            throw error;
+          }
+        },
+      );
+    } finally {
+      progress.close();
     }
 
     const sorted = [...results].sort((left, right) => {
@@ -2903,8 +3165,12 @@ export {
   aggregateTooltipSamples,
   aggregateZoomSamples,
   buildScorecard,
+  createProgressReporter,
+  formatEvaluationProgress,
   getRubricTotalPoints,
   isGraphRenderable,
   isStableGraphWindow,
+  mapWithConcurrency,
+  parseCliOptions,
   resolveStableProbeNodeIndex,
 };

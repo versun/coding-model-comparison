@@ -207,3 +207,90 @@ test("scorecard rewards repeated highlight responses instead of a single noisy c
   assert.ok(repeatabilityItem);
   assert.equal(repeatabilityItem.score, 2);
 });
+
+test("progress formatter includes position, model name, and stage", async () => {
+  const { formatEvaluationProgress } = await loadEvaluatorModule();
+
+  const line = formatEvaluationProgress({
+    current: 3,
+    total: 15,
+    modelName: "GPT 5.4",
+    stage: "Tooltip",
+  });
+
+  assert.equal(line, "评测进度 3/15 | GPT 5.4 | Tooltip");
+});
+
+test("cli options default to serial execution and accept explicit parallel limits", async () => {
+  const { parseCliOptions } = await loadEvaluatorModule();
+
+  assert.deepEqual(parseCliOptions([]), { parallel: 1 });
+  assert.deepEqual(parseCliOptions(["--parallel", "3"]), { parallel: 3 });
+  assert.deepEqual(parseCliOptions(["--parallel=4"]), { parallel: 4 });
+  assert.deepEqual(parseCliOptions(["-p", "2"]), { parallel: 2 });
+  assert.throws(
+    () => parseCliOptions(["--parallel", "0"]),
+    /positive integer/i,
+  );
+});
+
+test("concurrency limiter caps parallel model evaluations and preserves input order", async () => {
+  const { mapWithConcurrency } = await loadEvaluatorModule();
+  const items = ["alpha", "beta", "gamma", "delta"];
+  let active = 0;
+  let peak = 0;
+
+  const results = await mapWithConcurrency(items, 2, async (item, index) => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) =>
+      setTimeout(resolve, index < 2 ? 25 : 5),
+    );
+    active -= 1;
+    return `${index}:${item}`;
+  });
+
+  assert.equal(peak, 2);
+  assert.deepEqual(results, [
+    "0:alpha",
+    "1:beta",
+    "2:gamma",
+    "3:delta",
+  ]);
+});
+
+test("multi-line progress reporter rewrites the same block for parallel runs", async () => {
+  const { createProgressReporter } = await loadEvaluatorModule();
+  const writes = [];
+  const reporter = createProgressReporter({
+    total: 2,
+    interactive: true,
+    multiLine: true,
+    modelNames: ["Model A", "Model B"],
+    write: (chunk) => writes.push(chunk),
+  });
+
+  reporter.update({
+    current: 1,
+    modelName: "Model A",
+    stage: "桌面端",
+  });
+  reporter.update({
+    current: 2,
+    modelName: "Model B",
+    stage: "Tooltip",
+  });
+  reporter.finish({
+    current: 1,
+    modelName: "Model A",
+    totalScore: 88,
+  });
+  reporter.close();
+
+  const output = writes.join("");
+  assert.match(output, /\x1b\[2K评测进度 1\/2 \| Model A \| 桌面端/);
+  assert.match(output, /\r\x1b\[1A/);
+  assert.match(output, /评测进度 2\/2 \| Model B \| Tooltip/);
+  assert.match(output, /评测进度 1\/2 \| Model A \| 完成 88 分/);
+  assert.match(output, /\n$/);
+});
