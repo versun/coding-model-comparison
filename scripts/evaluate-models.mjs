@@ -37,6 +37,14 @@ UI 风格要求现代、极简、暗色模式。`;
 
 const MODELS = [
   {
+    file: "kimi2.6.html",
+    name: "Kimi 2.6 Code Preview",
+    runner: "Claude Code",
+    durationText: "1分 21秒",
+    durationSeconds: 81,
+    baseline: false,
+  },
+  {
     file: "glm-5v-turbo.html",
     name: "GLM 5V Turbo",
     runner: "Claude Code",

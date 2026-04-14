@@ -218,7 +218,7 @@ test("progress formatter includes position, model name, and stage", async () => 
     stage: "Tooltip",
   });
 
-  assert.equal(line, "评测进度 3/15 | GPT 5.4 | Tooltip");
+  assert.equal(line, "3/15 | 模型: GPT 5.4 | 项目: Tooltip");
 });
 
 test("cli options default to serial execution and accept explicit parallel limits", async () => {
@@ -288,9 +288,9 @@ test("multi-line progress reporter rewrites the same block for parallel runs", a
   reporter.close();
 
   const output = writes.join("");
-  assert.match(output, /\x1b\[2K评测进度 1\/2 \| Model A \| 桌面端/);
+  assert.match(output, /\x1b\[2K1\/2 \| 模型: Model A \| 项目: 桌面端/);
   assert.match(output, /\r\x1b\[1A/);
-  assert.match(output, /评测进度 2\/2 \| Model B \| Tooltip/);
-  assert.match(output, /评测进度 1\/2 \| Model A \| 完成 88 分/);
+  assert.match(output, /2\/2 \| 模型: Model B \| 项目: Tooltip/);
+  assert.match(output, /1\/2 \| 模型: Model A \| 项目: 完成 88 分/);
   assert.match(output, /\n$/);
 });
