@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Force-Directed Graph · Claude Opus 4.7</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --bg-soft: #12151a;
+    --panel: rgba(22, 26, 32, 0.72);
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #e6e8ec;
+    --muted: #8a94a3;
+    --accent: #7cc4ff;
+    --accent-soft: rgba(124, 196, 255, 0.18);
+    --highlight: #ffd166;
+    --link: rgba(255, 255, 255, 0.12);
+    --link-active: rgba(255, 209, 102, 0.75);
+  }
+  * { box-sizing: border-box; }
+  html, body, #root { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
+      "Helvetica Neue", Arial, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, rgba(124,196,255,0.08), transparent 60%),
+      radial-gradient(900px 500px at 90% 110%, rgba(255,209,102,0.06), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { position: relative; width: 100vw; height: 100vh; }
+  .graph { width: 100%; height: 100%; display: block; cursor: grab; }
+  .graph:active { cursor: grabbing; }
+
+  .header {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    z-index: 2;
+    padding: 14px 18px;
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    max-width: 320px;
+  }
+  .header h1 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .header p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .legend {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    z-index: 2;
+    display: flex;
+    gap: 14px;
+    padding: 10px 14px;
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    box-shadow: 0 0 8px currentColor;
+  }
+
+  .controls {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    z-index: 2;
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  }
+  .btn:hover { background: rgba(34, 40, 48, 0.85); border-color: rgba(255,255,255,0.16); }
+  .btn:active { transform: translateY(1px); }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    z-index: 5;
+    padding: 8px 10px;
+    background: rgba(18, 21, 26, 0.92);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--text);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    transform: translate(-50%, calc(-100% - 14px));
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+  .tooltip.visible { opacity: 1; }
+  .tooltip .k { color: var(--muted); margin-right: 6px; }
+  .tooltip .v { color: var(--text); font-variant-numeric: tabular-nums; }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 12px; }
+  .tooltip .title {
+    font-weight: 600; margin-bottom: 4px; color: var(--accent);
+    letter-spacing: 0.3px;
+  }
+
+  .hint {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    z-index: 2;
+    font-size: 11px;
+    color: var(--muted);
+    padding: 8px 12px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .hint kbd {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-family: inherit;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+  const { useEffect, useRef, useState, useMemo, useCallback } = React;
+
+  function generateData(nodeCount = 100) {
+    const groups = 6;
+    const nodes = d3.range(nodeCount).map((i) => ({
+      id: i,
+      label: `Node ${i.toString().padStart(3, "0")}`,
+      group: Math.floor(Math.random() * groups),
+      value: Math.round(Math.random() * 100),
+    }));
+
+    const links = [];
+    const seen = new Set();
+    // Each node gets 1-3 links; biased to same-group for visible clusters.
+    nodes.forEach((n) => {
+      const degree = 1 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < degree; k++) {
+        const sameGroup = Math.random() < 0.65;
+        const pool = sameGroup
+          ? nodes.filter((m) => m.group === n.group && m.id !== n.id)
+          : nodes.filter((m) => m.id !== n.id);
+        if (!pool.length) continue;
+        const target = pool[Math.floor(Math.random() * pool.length)];
+        const key = n.id < target.id ? `${n.id}-${target.id}` : `${target.id}-${n.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        links.push({ source: n.id, target: target.id, weight: Math.random() });
+      }
+    });
+    return { nodes, links };
+  }
+
+  const palette = ["#7cc4ff", "#ffd166", "#a0e7a0", "#f5a7c8", "#c6a8ff", "#ff9b7a"];
+
+  function Graph() {
+    const svgRef = useRef(null);
+    const tooltipRef = useRef(null);
+    const zoomRef = useRef(null);
+    const simulationRef = useRef(null);
+    const dataRef = useRef(null);
+    const [selectedId, setSelectedId] = useState(null);
+
+    const data = useMemo(() => generateData(100), []);
+    dataRef.current = data;
+
+    useEffect(() => {
+      const svg = d3.select(svgRef.current);
+      const width = svgRef.current.clientWidth;
+      const height = svgRef.current.clientHeight;
+
+      svg.selectAll("*").remove();
+
+      const defs = svg.append("defs");
+      const glow = defs.append("filter").attr("id", "glow").attr("x", "-50%").attr("y", "-50%").attr("width", "200%").attr("height", "200%");
+      glow.append("feGaussianBlur").attr("stdDeviation", "2.2").attr("result", "colored");
+      const merge = glow.append("feMerge");
+      merge.append("feMergeNode").attr("in", "colored");
+      merge.append("feMergeNode").attr("in", "SourceGraphic");
+
+      const rootG = svg.append("g").attr("class", "root");
+      const linkG = rootG.append("g").attr("class", "links");
+      const nodeG = rootG.append("g").attr("class", "nodes");
+
+      const nodes = data.nodes.map((d) => ({ ...d }));
+      const links = data.links.map((d) => ({ ...d }));
+
+      const neighbors = new Map();
+      nodes.forEach((n) => neighbors.set(n.id, new Set()));
+      links.forEach((l) => {
+        neighbors.get(l.source).add(l.target);
+        neighbors.get(l.target).add(l.source);
+      });
+
+      const simulation = d3
+        .forceSimulation(nodes)
+        .force(
+          "link",
+          d3.forceLink(links).id((d) => d.id).distance((l) => 50 + (1 - l.weight) * 60).strength(0.6)
+        )
+        .force("charge", d3.forceManyBody().strength(-140))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collide", d3.forceCollide().radius((d) => 6 + d.value / 18));
+      simulationRef.current = simulation;
+
+      const link = linkG
+        .attr("stroke", "var(--link)")
+        .attr("stroke-opacity", 0.9)
+        .selectAll("line")
+        .data(links)
+        .join("line")
+        .attr("stroke-width", (d) => 0.5 + d.weight * 1.2);
+
+      const node = nodeG
+        .selectAll("circle")
+        .data(nodes)
+        .join("circle")
+        .attr("r", (d) => 4 + d.value / 18)
+        .attr("fill", (d) => palette[d.group])
+        .attr("stroke", "rgba(0,0,0,0.35)")
+        .attr("stroke-width", 1)
+        .attr("filter", "url(#glow)")
+        .style("cursor", "pointer")
+        .call(
+          d3
+            .drag()
+            .on("start", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0.3).restart();
+              d.fx = d.x; d.fy = d.y;
+            })
+            .on("drag", (event, d) => {
+              d.fx = event.x; d.fy = event.y;
+            })
+            .on("end", (event, d) => {
+              if (!event.active) simulation.alphaTarget(0);
+              d.fx = null; d.fy = null;
+            })
+        );
+
+      const tooltip = d3.select(tooltipRef.current);
+
+      function showTooltip(d, event) {
+        tooltip
+          .classed("visible", true)
+          .style("left", event.clientX + "px")
+          .style("top", event.clientY + "px")
+          .html(
+            `<div class="title">${d.label}</div>
+             <div class="row"><span class="k">Group</span><span class="v">${d.group}</span></div>
+             <div class="row"><span class="k">Value</span><span class="v">${d.value}</span></div>
+             <div class="row"><span class="k">Links</span><span class="v">${neighbors.get(d.id).size}</span></div>`
+          );
+      }
+      function hideTooltip() {
+        tooltip.classed("visible", false);
+      }
+
+      node
+        .on("mouseenter", function (event, d) {
+          d3.select(this).transition().duration(120).attr("r", (n) => (4 + n.value / 18) * 1.45);
+          showTooltip(d, event);
+        })
+        .on("mousemove", function (event) {
+          tooltip.style("left", event.clientX + "px").style("top", event.clientY + "px");
+        })
+        .on("mouseleave", function (event, d) {
+          d3.select(this).transition().duration(160).attr("r", (n) => 4 + n.value / 18);
+          hideTooltip();
+        })
+        .on("click", function (event, d) {
+          event.stopPropagation();
+          setSelectedId((prev) => (prev === d.id ? null : d.id));
+        });
+
+      svg.on("click", () => setSelectedId(null));
+
+      const zoom = d3
+        .zoom()
+        .scaleExtent([0.25, 5])
+        .on("zoom", (event) => {
+          rootG.attr("transform", event.transform);
+        });
+      zoomRef.current = zoom;
+      svg.call(zoom);
+
+      simulation.on("tick", () => {
+        link
+          .attr("x1", (d) => d.source.x)
+          .attr("y1", (d) => d.source.y)
+          .attr("x2", (d) => d.target.x)
+          .attr("y2", (d) => d.target.y);
+        node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+      });
+
+      // Resize
+      function handleResize() {
+        const w = svgRef.current.clientWidth;
+        const h = svgRef.current.clientHeight;
+        simulation.force("center", d3.forceCenter(w / 2, h / 2));
+        simulation.alpha(0.3).restart();
+      }
+      window.addEventListener("resize", handleResize);
+
+      // Save references for selection effect
+      svgRef.current.__refs = { node, link, neighbors };
+
+      return () => {
+        window.removeEventListener("resize", handleResize);
+        simulation.stop();
+      };
+    }, [data]);
+
+    // Apply highlight when selection changes
+    useEffect(() => {
+      const refs = svgRef.current && svgRef.current.__refs;
+      if (!refs) return;
+      const { node, link, neighbors } = refs;
+
+      if (selectedId == null) {
+        node
+          .transition().duration(180)
+          .attr("opacity", 1)
+          .attr("stroke", "rgba(0,0,0,0.35)")
+          .attr("stroke-width", 1);
+        link
+          .transition().duration(180)
+          .attr("stroke", "rgba(255,255,255,0.12)")
+          .attr("stroke-opacity", 0.9);
+        return;
+      }
+
+      const connected = neighbors.get(selectedId) || new Set();
+      node
+        .transition().duration(180)
+        .attr("opacity", (d) =>
+          d.id === selectedId || connected.has(d.id) ? 1 : 0.15
+        )
+        .attr("stroke", (d) =>
+          d.id === selectedId
+            ? "#ffd166"
+            : connected.has(d.id)
+            ? "rgba(255,209,102,0.6)"
+            : "rgba(0,0,0,0.35)"
+        )
+        .attr("stroke-width", (d) =>
+          d.id === selectedId ? 2.5 : connected.has(d.id) ? 1.75 : 1
+        );
+
+      link
+        .transition().duration(180)
+        .attr("stroke", (d) =>
+          d.source.id === selectedId || d.target.id === selectedId
+            ? "rgba(255,209,102,0.75)"
+            : "rgba(255,255,255,0.05)"
+        )
+        .attr("stroke-opacity", (d) =>
+          d.source.id === selectedId || d.target.id === selectedId ? 1 : 0.35
+        );
+    }, [selectedId]);
+
+    const handleReset = useCallback(() => {
+      if (!zoomRef.current || !svgRef.current) return;
+      d3.select(svgRef.current)
+        .transition()
+        .duration(400)
+        .call(zoomRef.current.transform, d3.zoomIdentity);
+      setSelectedId(null);
+    }, []);
+
+    const handleRestart = useCallback(() => {
+      if (simulationRef.current) simulationRef.current.alpha(1).restart();
+    }, []);
+
+    return React.createElement(
+      "div",
+      { className: "app" },
+      React.createElement(
+        "div",
+        { className: "header" },
+        React.createElement("h1", null, "Force-Directed Graph"),
+        React.createElement(
+          "p",
+          null,
+          "100 nodes · clustered by group · drag nodes, hover for details, click to focus."
+        )
+      ),
+      React.createElement(
+        "div",
+        { className: "controls" },
+        React.createElement(
+          "button",
+          { className: "btn", onClick: handleRestart },
+          "Re-simulate"
+        ),
+        React.createElement(
+          "button",
+          { className: "btn", onClick: handleReset },
+          "Reset view"
+        )
+      ),
+      React.createElement("svg", { ref: svgRef, className: "graph" }),
+      React.createElement("div", { ref: tooltipRef, className: "tooltip" }),
+      React.createElement(
+        "div",
+        { className: "legend" },
+        palette.map((c, i) =>
+          React.createElement(
+            "span",
+            { key: i },
+            React.createElement("span", {
+              className: "dot",
+              style: { background: c, color: c },
+            }),
+            `Group ${i}`
+          )
+        )
+      ),
+      React.createElement(
+        "div",
+        { className: "hint" },
+        "Scroll to zoom · Drag background to pan · ",
+        React.createElement("kbd", null, "Click"),
+        " a node to highlight neighbors"
+      )
+    );
+  }
+
+  const root = ReactDOM.createRoot(document.getElementById("root"));
+  root.render(React.createElement(Graph));
+</script>
+</body>
+</html>

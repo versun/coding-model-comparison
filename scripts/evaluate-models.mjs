@@ -37,6 +37,14 @@ UI 风格要求现代、极简、暗色模式。`;
 
 const MODELS = [
   {
+    file: "claude-opus-4.7.html",
+    name: "Claude Opus 4.7",
+    runner: "Claude Code",
+    durationText: "1分 10秒",
+    durationSeconds: 70,
+    baseline: false,
+  },
+  {
     file: "kimi2.6.html",
     name: "Kimi 2.6 Code Preview",
     runner: "Claude Code",
@@ -134,7 +142,7 @@ const MODELS = [
   },
   {
     file: "opus-4.6.html",
-    name: "Opus 4.6",
+    name: "Claude Opus 4.6",
     runner: "Claude Code",
     durationText: "53秒",
     durationSeconds: 53,
@@ -464,6 +472,10 @@ function getDefaultDesktopMetrics() {
     viewportMeta: false,
     ariaGraphCount: 0,
     rootTextColor: "rgb(255, 255, 255)",
+    graphCursor: "auto",
+    nodeCursor: "auto",
+    legendItemCount: 0,
+    hintBlockCount: 0,
   };
 }
 
@@ -502,6 +514,15 @@ function getDefaultZoomMetrics() {
     afterScale: 1,
     beforeTransform: "",
     afterTransform: "",
+    sampleCount: 0,
+    repeatability: 0,
+  };
+}
+
+function getDefaultDragMetrics() {
+  return {
+    changed: false,
+    distance: 0,
     sampleCount: 0,
     repeatability: 0,
   };
@@ -606,19 +627,19 @@ const RUBRIC = [
   {
     key: "graphData",
     label: "图数据完整度",
-    points: 18,
+    points: 16,
     detail: "评估节点数量、边数量以及图区域是否足够完整。",
     subItems: [
       {
         key: "nodeCountAccuracy",
         label: "节点数量接近 100",
-        points: 8,
+        points: 7,
         detail: "对 100 个随机数据点的还原是否准确。",
       },
       {
         key: "linkDensity",
         label: "边数量充分",
-        points: 4,
+        points: 3,
         detail: "图结构是否具备足够的连边密度。",
       },
       {
@@ -644,13 +665,13 @@ const RUBRIC = [
   {
     key: "tooltip",
     label: "Tooltip 交互",
-    points: 20,
+    points: 18,
     detail: "检查悬停反馈是否存在、信息是否丰富、字段是否足够完整。",
     subItems: [
       {
         key: "tooltipVisible",
         label: "悬停后 Tooltip 可见",
-        points: 5,
+        points: 4,
         detail: "悬停真实节点后出现 Tooltip。",
       },
       {
@@ -662,7 +683,7 @@ const RUBRIC = [
       {
         key: "tooltipLength",
         label: "Tooltip 文本长度",
-        points: 4,
+        points: 3,
         detail: "Tooltip 提供了足够的信息量，而不是只显示一个短标签。",
       },
       {
@@ -688,13 +709,13 @@ const RUBRIC = [
   {
     key: "highlight",
     label: "邻接高亮",
-    points: 20,
+    points: 18,
     detail: "检查点击后是否能区分目标节点、相邻节点与非相邻节点。",
     subItems: [
       {
         key: "targetFeedback",
         label: "目标节点反馈",
-        points: 4,
+        points: 3,
         detail: "被点击节点自身出现明显状态变化。",
       },
       {
@@ -718,7 +739,7 @@ const RUBRIC = [
       {
         key: "semanticHighlighting",
         label: "高亮语义标记",
-        points: 2,
+        points: 1,
         detail: "存在 highlighted/selected/active 等可识别语义类。",
       },
       {
@@ -732,19 +753,19 @@ const RUBRIC = [
   {
     key: "zoom",
     label: "缩放能力",
-    points: 12,
-    detail: "检查滚轮缩放是否生效，以及缩放变化是否足够明显。",
+    points: 10,
+    detail: "检查滚轮缩放是否生效、变化是否明显，以及能否稳定复现。",
     subItems: [
       {
         key: "zoomDetected",
         label: "检测到缩放响应",
-        points: 5,
+        points: 4,
         detail: "对图区域滚轮操作后容器状态发生变化。",
       },
       {
         key: "zoomDelta",
         label: "缩放幅度",
-        points: 4,
+        points: 3,
         detail: "缩放比例的变化足够明显。",
       },
       {
@@ -754,10 +775,54 @@ const RUBRIC = [
         detail: "transform / viewBox 等状态明显变化。",
       },
       {
-        key: "zoomScaleReadable",
-        label: "缩放比例可读",
+        key: "zoomRepeatability",
+        label: "缩放响应可重复",
         points: 1,
-        detail: "缩放前后比例为可解析的有效数字。",
+        detail: "多次独立滚轮探测时，缩放都能稳定出现。",
+      },
+    ],
+  },
+  {
+    key: "interactionCompleteness",
+    label: "交互完整度",
+    points: 8,
+    detail: "奖励更完整的交互体验，例如拖拽、控件、图例和操作提示。",
+    subItems: [
+      {
+        key: "draggableNodes",
+        label: "节点可拖拽",
+        points: 3,
+        detail: "拖拽真实节点后，节点位置出现清晰位移。",
+      },
+      {
+        key: "dragRepeatability",
+        label: "拖拽可重复",
+        points: 1,
+        detail: "多次独立拖拽探测时，节点拖动能稳定成功。",
+      },
+      {
+        key: "cursorAffordance",
+        label: "游标反馈",
+        points: 1,
+        detail: "图区域或节点使用 pointer / grab / move 等交互型游标。",
+      },
+      {
+        key: "controlDensity",
+        label: "控件数量",
+        points: 1,
+        detail: "存在两个或以上明确控制入口，例如按钮或摘要操作。",
+      },
+      {
+        key: "legendSupport",
+        label: "图例说明",
+        points: 1,
+        detail: "页面存在图例或分组说明，帮助理解图中类别。",
+      },
+      {
+        key: "interactionHints",
+        label: "操作提示",
+        points: 1,
+        detail: "页面明确提示用户如何缩放、拖拽、点击或悬停。",
       },
     ],
   },
@@ -1060,6 +1125,27 @@ function aggregateZoomSamples(samples) {
   };
 }
 
+function aggregateDragSamples(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return getDefaultDragMetrics();
+  }
+
+  const changedSamples = samples.filter((sample) => sample?.changed);
+
+  return {
+    changed: changedSamples.length >= Math.ceil(samples.length / 2),
+    distance: median(
+      changedSamples.map((sample) => sample?.distance ?? 0),
+      1,
+    ),
+    sampleCount: samples.length,
+    repeatability: getSampleRepeatability(
+      samples,
+      (sample) => sample?.changed && (sample?.distance ?? 0) >= 12,
+    ),
+  };
+}
+
 function scoreLoadStability(context) {
   const desktop = context.desktop;
   const probeReady =
@@ -1081,18 +1167,18 @@ function scoreGraphData(context) {
     desktop.probeCircleDomIndex != null || desktop.targetCircleDomIndex != null;
   let nodeCountAccuracy = 0;
   if (desktop.nodeCount >= 98 && desktop.nodeCount <= 102) {
-    nodeCountAccuracy = 8;
+    nodeCountAccuracy = 7;
   } else if (desktop.nodeCount >= 92 && desktop.nodeCount <= 108) {
-    nodeCountAccuracy = 6;
+    nodeCountAccuracy = 5;
   } else if (desktop.nodeCount >= 80 && desktop.nodeCount <= 120) {
     nodeCountAccuracy = 3;
   }
 
   let linkDensity = 0;
   if (desktop.linkCount >= 90) {
-    linkDensity = 4;
-  } else if (desktop.linkCount >= 60) {
     linkDensity = 3;
+  } else if (desktop.linkCount >= 60) {
+    linkDensity = 2;
   } else if (desktop.linkCount >= 30) {
     linkDensity = 1;
   }
@@ -1124,9 +1210,9 @@ function scoreTooltip(context) {
   const tooltip = context.tooltip;
   let tooltipLength = 0;
   if (tooltip.textLength >= 56) {
-    tooltipLength = 4;
+    tooltipLength = 3;
   } else if (tooltip.textLength >= 32) {
-    tooltipLength = 4;
+    tooltipLength = 3;
   } else if (tooltip.textLength >= 12) {
     tooltipLength = 2;
   } else if (tooltip.textLength >= 6) {
@@ -1162,7 +1248,7 @@ function scoreTooltip(context) {
   }
 
   return createBreakdown("tooltip", {
-    tooltipVisible: tooltip.visible ? 5 : 0,
+    tooltipVisible: tooltip.visible ? 4 : 0,
     tooltipRepeatability,
     tooltipLength,
     tooltipRichness,
@@ -1211,9 +1297,7 @@ function scoreHighlight(context) {
   }
 
   let semanticHighlighting = 0;
-  if (highlight.highlightedClassCount >= 3) {
-    semanticHighlighting = 2;
-  } else if (highlight.highlightedClassCount >= 1) {
+  if (highlight.highlightedClassCount >= 1) {
     semanticHighlighting = 1;
   }
 
@@ -1225,7 +1309,7 @@ function scoreHighlight(context) {
   }
 
   return createBreakdown("highlight", {
-    targetFeedback: highlight.targetChanged ? 4 : 0,
+    targetFeedback: highlight.targetChanged ? 3 : 0,
     nodeSeparation,
     linkSeparation,
     neighborIsolation,
@@ -1240,24 +1324,52 @@ function scoreZoom(context) {
 
   let zoomDelta = 0;
   if (scaleDelta >= 0.25) {
-    zoomDelta = 4;
-  } else if (scaleDelta >= 0.12) {
     zoomDelta = 3;
+  } else if (scaleDelta >= 0.12) {
+    zoomDelta = 2;
   } else if (scaleDelta >= 0.05) {
     zoomDelta = 1;
   }
 
+  let zoomRepeatability = 0;
+  if (zoom.repeatability >= 0.66) {
+    zoomRepeatability = 1;
+  }
+
   return createBreakdown("zoom", {
-    zoomDetected: zoom.changed ? 5 : 0,
+    zoomDetected: zoom.changed ? 4 : 0,
     zoomDelta,
     zoomTransform:
       zoom.beforeTransform !== zoom.afterTransform && zoom.changed ? 2 : 0,
-    zoomScaleReadable:
-      Number.isFinite(zoom.beforeScale) &&
-      Number.isFinite(zoom.afterScale) &&
-      zoom.afterScale > 0
-        ? 1
-        : 0,
+    zoomRepeatability,
+  });
+}
+
+function scoreInteractionCompleteness(context) {
+  const desktop = context.desktop;
+  const drag = context.drag;
+  const graphCursor = String(desktop.graphCursor || "").toLowerCase();
+  const nodeCursor = String(desktop.nodeCursor || "").toLowerCase();
+  const interactiveCursor =
+    /(grab|grabbing|move)/.test(graphCursor) ||
+    /(pointer|grab|grabbing|move)/.test(nodeCursor);
+
+  let draggableNodes = 0;
+  if (drag.changed && drag.distance >= 48) {
+    draggableNodes = 3;
+  } else if (drag.changed && drag.distance >= 24) {
+    draggableNodes = 2;
+  } else if (drag.changed && drag.distance >= 12) {
+    draggableNodes = 1;
+  }
+
+  return createBreakdown("interactionCompleteness", {
+    draggableNodes,
+    dragRepeatability: drag.repeatability >= 0.66 ? 1 : 0,
+    cursorAffordance: interactiveCursor ? 1 : 0,
+    controlDensity: desktop.controlCount >= 2 ? 1 : 0,
+    legendSupport: desktop.legendItemCount >= 3 ? 1 : 0,
+    interactionHints: desktop.hintBlockCount >= 1 ? 1 : 0,
   });
 }
 
@@ -1365,6 +1477,7 @@ function normalizeContext(input) {
     tooltip: { ...getDefaultTooltipMetrics(), ...(input.tooltip ?? {}) },
     highlight: { ...getDefaultHighlightMetrics(), ...(input.highlight ?? {}) },
     zoom: { ...getDefaultZoomMetrics(), ...(input.zoom ?? {}) },
+    drag: { ...getDefaultDragMetrics(), ...(input.drag ?? {}) },
     mobile: { ...getDefaultMobileMetrics(), ...(input.mobile ?? {}) },
     theme: { ...getDefaultThemeMetrics(), ...(input.theme ?? {}) },
   };
@@ -1382,6 +1495,7 @@ function buildScorecard(input) {
     tooltip: scoreTooltip(context),
     highlight: scoreHighlight(context),
     zoom: scoreZoom(context),
+    interactionCompleteness: scoreInteractionCompleteness(context),
     infoArchitecture: scoreInfoArchitecture(context),
     darkTheme: scoreDarkTheme(context),
     responsive: scoreResponsive(context),
@@ -1708,6 +1822,8 @@ async function waitForGraph(page) {
 async function collectPageMetrics(page) {
   return page.evaluate(() => {
     const roundValue = (value, digits = 3) => Number(value.toFixed(digits));
+    const interactionKeywordRegex =
+      /zoom|scroll|drag|click|hover|pan|wheel|reset|highlight|缩放|滚轮|拖拽|拖动|点击|悬停|平移|高亮/gi;
 
     const isVisible = (element) => {
       if (!(element instanceof Element)) {
@@ -1751,6 +1867,13 @@ async function collectPageMetrics(page) {
 
       return Math.sqrt(values[0] ** 2 + values[1] ** 2);
     };
+
+    const countInteractionKeywords = (text) =>
+      new Set(
+        (text.match(interactionKeywordRegex) ?? []).map((token) =>
+          token.toLowerCase(),
+        ),
+      ).size;
 
     const depthWithinSvg = (element) => {
       let depth = 0;
@@ -1807,6 +1930,11 @@ async function collectPageMetrics(page) {
       .sort((left, right) => left.distance - right.distance);
 
     const targetCircle = rankedCircles[0] ?? null;
+    const targetCircleElement =
+      targetCircle != null
+        ? (document.querySelectorAll("svg circle")[targetCircle.domIndex] ??
+          null)
+        : null;
 
     const zoomCandidates = Array.from(document.querySelectorAll("svg g"))
       .map((element, domIndex) => {
@@ -1865,6 +1993,65 @@ async function collectPageMetrics(page) {
             .filter(Boolean),
         ),
       );
+
+    const visibleContainers = Array.from(
+      document.body.querySelectorAll(
+        "div, section, article, aside, nav, ul, ol, header, footer",
+      ),
+    ).filter((element) => isVisible(element) && !element.closest("svg"));
+
+    const legendCandidates = visibleContainers
+      .map((element) => {
+        const texts = uniqueText(
+          Array.from(element.querySelectorAll("*")).filter(isVisible),
+        )
+          .map((text) => text.trim())
+          .filter((text) => text.length >= 1 && text.length <= 18);
+        const swatchCount = Array.from(element.querySelectorAll("*")).filter(
+          (child) => {
+            if (!(child instanceof Element) || !isVisible(child)) {
+              return false;
+            }
+
+            const rect = child.getBoundingClientRect();
+            if (
+              rect.width < 4 ||
+              rect.width > 18 ||
+              rect.height < 4 ||
+              rect.height > 18
+            ) {
+              return false;
+            }
+
+            const style = getComputedStyle(child);
+            const hasColor =
+              style.backgroundColor !== "rgba(0, 0, 0, 0)" ||
+              style.borderColor !== "rgba(0, 0, 0, 0)";
+
+            return (
+              hasColor &&
+              (style.borderRadius !== "0px" ||
+                /legend/i.test(child.className?.toString() ?? ""))
+            );
+          },
+        ).length;
+
+        return {
+          textCount: texts.length,
+          swatchCount,
+          className: element.className?.toString() ?? "",
+        };
+      })
+      .filter(
+        (candidate) =>
+          /legend/i.test(candidate.className) ||
+          (candidate.textCount >= 3 && candidate.swatchCount >= 3),
+      )
+      .sort((left, right) => right.textCount - left.textCount);
+
+    const hintBlocks = uniqueText(nonSvgTextElements).filter(
+      (text) => text.length >= 12 && countInteractionKeywords(text) >= 2,
+    );
 
     const descriptiveBlocks = uniqueText(
       nonSvgTextElements.filter((element) => {
@@ -1942,6 +2129,14 @@ async function collectPageMetrics(page) {
       viewportWidth,
       viewportHeight,
       rootTextColor,
+      graphCursor: visibleSvgs[0]
+        ? getComputedStyle(visibleSvgs[0]).cursor
+        : "auto",
+      nodeCursor: targetCircleElement
+        ? getComputedStyle(targetCircleElement).cursor
+        : "auto",
+      legendItemCount: legendCandidates[0]?.textCount ?? 0,
+      hintBlockCount: hintBlocks.length,
     };
   });
 }
@@ -2315,6 +2510,52 @@ async function probeZoom(page) {
   };
 }
 
+async function probeNodeDrag(page, nodeIndex) {
+  if (nodeIndex == null) {
+    return getDefaultDragMetrics();
+  }
+
+  const targetLocator = page.locator("svg circle").nth(nodeIndex);
+  const before = await targetLocator.boundingBox();
+
+  if (!before) {
+    return getDefaultDragMetrics();
+  }
+
+  const startX = before.x + before.width / 2;
+  const startY = before.y + before.height / 2;
+  const targetX = startX + Math.min(80, Math.max(before.width * 6, 36));
+  const targetY = startY + Math.min(56, Math.max(before.height * 4, 24));
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(targetX, targetY, { steps: 8 });
+  await page.waitForTimeout(180);
+  await page.mouse.up();
+  await page.waitForTimeout(260);
+
+  const after = await targetLocator.boundingBox();
+
+  if (!after) {
+    return getDefaultDragMetrics();
+  }
+
+  const distance = round(
+    Math.hypot(
+      after.x + after.width / 2 - startX,
+      after.y + after.height / 2 - startY,
+    ),
+    1,
+  );
+
+  return {
+    changed: distance >= 12,
+    distance,
+    sampleCount: 1,
+    repeatability: 0,
+  };
+}
+
 async function screenshotTheme(page) {
   const buffer = await page.screenshot({ type: "png", fullPage: false });
   const png = PNG.sync.read(buffer);
@@ -2390,6 +2631,14 @@ function createNotes(context) {
     notes.push("滚轮未检测到缩放容器变化");
   }
 
+  if (context.drag.changed) {
+    notes.push(
+      `节点拖拽位移 ${round(context.drag.distance, 1)}px，重复性 ${round(context.drag.repeatability * 100, 0)}%`,
+    );
+  } else {
+    notes.push("未检测到稳定的节点拖拽位移");
+  }
+
   if (context.mobile.scrollWidth - context.mobile.viewportWidth > 24) {
     notes.push("移动端存在明显横向溢出");
   }
@@ -2457,6 +2706,16 @@ async function evaluateModel(
     defaultFactory: getDefaultZoomMetrics,
   });
 
+  onProgress("节点拖拽");
+  const dragRun = await collectRepeatedProbe({
+    browser,
+    serverBaseUrl,
+    model,
+    probe: (page, probeNodeIndex) => probeNodeDrag(page, probeNodeIndex),
+    aggregate: aggregateDragSamples,
+    defaultFactory: getDefaultDragMetrics,
+  });
+
   let mobile = getDefaultMobileMetrics();
   let mobileErrors = {
     pageErrors: [],
@@ -2480,11 +2739,13 @@ async function evaluateModel(
   const tooltip = tooltipRun.aggregated;
   const highlight = highlightRun.aggregated;
   const zoom = zoomRun.aggregated;
+  const drag = dragRun.aggregated;
   const pageErrors = uniqueStrings([
     ...desktopErrors.pageErrors,
     ...tooltipRun.pageErrors,
     ...highlightRun.pageErrors,
     ...zoomRun.pageErrors,
+    ...dragRun.pageErrors,
     ...mobileErrors.pageErrors,
   ]);
   const consoleErrors = uniqueStrings([
@@ -2492,6 +2753,7 @@ async function evaluateModel(
     ...tooltipRun.consoleErrors,
     ...highlightRun.consoleErrors,
     ...zoomRun.consoleErrors,
+    ...dragRun.consoleErrors,
     ...mobileErrors.consoleErrors,
   ]);
 
@@ -2504,6 +2766,7 @@ async function evaluateModel(
     tooltip,
     highlight,
     zoom,
+    drag,
     mobile,
     theme,
   });
@@ -2515,6 +2778,7 @@ async function evaluateModel(
     tooltip,
     highlight,
     zoom,
+    drag,
     mobile,
   };
 
@@ -2529,6 +2793,7 @@ async function evaluateModel(
       tooltip,
       highlight,
       zoom,
+      drag,
       theme: {
         averageRgb: formatRgb(theme.average),
         luminance: theme.luminance,
@@ -2585,8 +2850,12 @@ function buildIndexHtml(results, generatedAt) {
     (left, right) =>
       right.scores.tooltip +
       right.scores.highlight +
-      right.scores.zoom -
-      (left.scores.tooltip + left.scores.highlight + left.scores.zoom),
+      right.scores.zoom +
+      right.scores.interactionCompleteness -
+      (left.scores.tooltip +
+        left.scores.highlight +
+        left.scores.zoom +
+        left.scores.interactionCompleteness),
   )[0];
 
   const tableRows = ranked
@@ -2808,7 +3077,7 @@ function buildIndexHtml(results, generatedAt) {
 
       table {
         width: 100%;
-        min-width: 1520px;
+        min-width: 1640px;
         border-collapse: collapse;
       }
 
@@ -3009,6 +3278,7 @@ function buildIndexHtml(results, generatedAt) {
                 <th>Tooltip</th>
                 <th>邻接高亮</th>
                 <th>缩放</th>
+                <th>交互完整度</th>
                 <th>信息架构</th>
                 <th>暗色主题</th>
                 <th>移动端</th>

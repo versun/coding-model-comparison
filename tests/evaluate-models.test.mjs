@@ -123,14 +123,33 @@ test("refined rubric keeps total score at 100 and adds repeatability-focused sub
 
   const tooltip = RUBRIC.find((item) => item.key === "tooltip");
   const highlight = RUBRIC.find((item) => item.key === "highlight");
+  const interactionCompleteness = RUBRIC.find(
+    (item) => item.key === "interactionCompleteness",
+  );
+  const zoom = RUBRIC.find((item) => item.key === "zoom");
 
   assert.ok(tooltip);
   assert.ok(highlight);
+  assert.ok(interactionCompleteness);
+  assert.ok(zoom);
   assert.ok(
     tooltip.subItems.some((item) => item.key === "tooltipRepeatability"),
   );
   assert.ok(
     highlight.subItems.some((item) => item.key === "highlightRepeatability"),
+  );
+  assert.ok(
+    interactionCompleteness.subItems.some(
+      (item) => item.key === "draggableNodes",
+    ),
+  );
+  assert.ok(
+    interactionCompleteness.subItems.some(
+      (item) => item.key === "legendSupport",
+    ),
+  );
+  assert.ok(
+    zoom.subItems.some((item) => item.key === "zoomRepeatability"),
   );
 });
 
@@ -206,6 +225,101 @@ test("scorecard rewards repeated highlight responses instead of a single noisy c
 
   assert.ok(repeatabilityItem);
   assert.equal(repeatabilityItem.score, 2);
+});
+
+test("scorecard rewards draggable nodes, controls, legend, and usage hints", async () => {
+  const { buildScorecard } = await loadEvaluatorModule();
+
+  const result = buildScorecard({
+    renderReady: true,
+    desktop: {
+      svgCount: 1,
+      nodeCount: 100,
+      linkCount: 140,
+      targetCircleDomIndex: 7,
+      probeCircleDomIndex: 7,
+      graphAreaHeight: 620,
+      graphAreaWidth: 920,
+      headingCount: 1,
+      descriptiveBlockCount: 2,
+      statsBlockCount: 1,
+      infoContainerCount: 3,
+      controlCount: 2,
+      viewportMeta: true,
+      ariaGraphCount: 1,
+      rootTextColor: "rgb(240, 240, 240)",
+      graphCursor: "grab",
+      nodeCursor: "pointer",
+      legendItemCount: 6,
+      hintBlockCount: 1,
+    },
+    pageErrors: [],
+    consoleErrors: [],
+    tooltip: {
+      visible: true,
+      count: 1,
+      textLength: 42,
+      richness: 4,
+      sample: "Node A · Cluster 1 · Degree 6 · Value 82",
+      sampleCount: 3,
+      visibleSampleCount: 3,
+      repeatability: 1,
+    },
+    highlight: {
+      targetChanged: true,
+      nodeStyleChanges: 4,
+      linkStyleChanges: 4,
+      nodeOpacityShiftCount: 20,
+      nodeFillShiftCount: 3,
+      linkOpacityShiftCount: 4,
+      dimmedNodes: 96,
+      highlightedClassCount: 1,
+      sampleCount: 3,
+      repeatability: 2 / 3,
+    },
+    zoom: {
+      changed: true,
+      beforeScale: 1,
+      afterScale: 1.3,
+      beforeTransform: "translate(0,0) scale(1)",
+      afterTransform: "translate(0,0) scale(1.3)",
+      sampleCount: 3,
+      repeatability: 2 / 3,
+    },
+    drag: {
+      changed: true,
+      distance: 58,
+      sampleCount: 3,
+      repeatability: 2 / 3,
+    },
+    mobile: {
+      scrollWidth: 390,
+      viewportWidth: 390,
+      graphAreaHeight: 260,
+      nodeCount: 86,
+      viewportMeta: true,
+    },
+    theme: {
+      luminance: 42,
+      average: { r: 20, g: 24, b: 32 },
+    },
+  });
+
+  const interactionBreakdown =
+    result.breakdown.interactionCompleteness.items;
+
+  assert.deepEqual(
+    interactionBreakdown.map((item) => [item.key, item.score]),
+    [
+      ["draggableNodes", 3],
+      ["dragRepeatability", 1],
+      ["cursorAffordance", 1],
+      ["controlDensity", 1],
+      ["legendSupport", 1],
+      ["interactionHints", 1],
+    ],
+  );
+  assert.equal(result.scores.interactionCompleteness, 8);
 });
 
 test("progress formatter includes position, model name, and stage", async () => {

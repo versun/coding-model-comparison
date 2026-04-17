@@ -1,351 +1,366 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>模型编程性能测试汇总</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #eef3f9;
-        --panel: rgba(255, 255, 255, 0.88);
-        --panel-strong: #ffffff;
-        --text: #162033;
-        --muted: #5f6f86;
-        --line: rgba(28, 46, 74, 0.12);
-        --accent: #1458ff;
-        --accent-soft: rgba(20, 88, 255, 0.12);
-        --good-bg: #e6f8ee;
-        --good-text: #13653e;
-        --mid-bg: #fff5dd;
-        --mid-text: #9a6700;
-        --low-bg: #fee7e7;
-        --low-text: #a61b1b;
-        --shadow: 0 22px 60px rgba(13, 35, 68, 0.1);
-      }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>模型编程性能测试汇总</title>
+        <style>
+            :root {
+                color-scheme: light;
+                --bg: #eef3f9;
+                --panel: rgba(255, 255, 255, 0.88);
+                --panel-strong: #ffffff;
+                --text: #162033;
+                --muted: #5f6f86;
+                --line: rgba(28, 46, 74, 0.12);
+                --accent: #1458ff;
+                --accent-soft: rgba(20, 88, 255, 0.12);
+                --good-bg: #e6f8ee;
+                --good-text: #13653e;
+                --mid-bg: #fff5dd;
+                --mid-text: #9a6700;
+                --low-bg: #fee7e7;
+                --low-text: #a61b1b;
+                --shadow: 0 22px 60px rgba(13, 35, 68, 0.1);
+            }
 
-      * {
-        box-sizing: border-box;
-      }
+            * {
+                box-sizing: border-box;
+            }
 
-      body {
-        margin: 0;
-        color: var(--text);
-        font-family:
-          "Noto Sans SC",
-          "PingFang SC",
-          "Hiragino Sans GB",
-          "Microsoft YaHei",
-          sans-serif;
-        background:
-          radial-gradient(75rem 45rem at 100% -10%, rgba(48, 129, 255, 0.18), transparent 60%),
-          radial-gradient(70rem 34rem at -10% -15%, rgba(124, 184, 255, 0.2), transparent 58%),
-          linear-gradient(180deg, #f7faff 0%, #ecf2f9 100%);
-      }
+            body {
+                margin: 0;
+                color: var(--text);
+                font-family:
+                    "Noto Sans SC", "PingFang SC", "Hiragino Sans GB",
+                    "Microsoft YaHei", sans-serif;
+                background:
+                    radial-gradient(
+                        75rem 45rem at 100% -10%,
+                        rgba(48, 129, 255, 0.18),
+                        transparent 60%
+                    ),
+                    radial-gradient(
+                        70rem 34rem at -10% -15%,
+                        rgba(124, 184, 255, 0.2),
+                        transparent 58%
+                    ),
+                    linear-gradient(180deg, #f7faff 0%, #ecf2f9 100%);
+            }
 
-      .container {
-        width: min(1600px, calc(100vw - 24px));
-        margin: 0 auto;
-        padding: 24px 0 48px;
-      }
+            .container {
+                width: min(1600px, calc(100vw - 24px));
+                margin: 0 auto;
+                padding: 24px 0 48px;
+            }
 
-      .hero,
-      .panel,
-      .card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 20px;
-        box-shadow: var(--shadow);
-        backdrop-filter: blur(18px);
-      }
+            .hero,
+            .panel,
+            .card {
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 20px;
+                box-shadow: var(--shadow);
+                backdrop-filter: blur(18px);
+            }
 
-      .hero {
-        padding: 24px 24px 20px;
-        margin-bottom: 16px;
-      }
+            .hero {
+                padding: 24px 24px 20px;
+                margin-bottom: 16px;
+            }
 
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        border-radius: 999px;
-        background: var(--accent-soft);
-        color: var(--accent);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
+            .eyebrow {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                border-radius: 999px;
+                background: var(--accent-soft);
+                color: var(--accent);
+                font-size: 12px;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
 
-      .eyebrow::before {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: currentColor;
-      }
+            .eyebrow::before {
+                content: "";
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: currentColor;
+            }
 
-      h1,
-      h2,
-      h3 {
-        margin: 0;
-        letter-spacing: -0.02em;
-      }
+            h1,
+            h2,
+            h3 {
+                margin: 0;
+                letter-spacing: -0.02em;
+            }
 
-      h1 {
-        margin-top: 14px;
-        font-size: clamp(1.9rem, 4vw, 3.2rem);
-      }
+            h1 {
+                margin-top: 14px;
+                font-size: clamp(1.9rem, 4vw, 3.2rem);
+            }
 
-      p {
-        margin: 0;
-        line-height: 1.7;
-      }
+            p {
+                margin: 0;
+                line-height: 1.7;
+            }
 
-      .sub {
-        margin-top: 10px;
-        max-width: 72rem;
-        color: var(--muted);
-        font-size: 0.96rem;
-      }
+            .sub {
+                margin-top: 10px;
+                max-width: 72rem;
+                color: var(--muted);
+                font-size: 0.96rem;
+            }
 
-      .link {
-        color: var(--accent);
-        text-decoration: none;
-        font-weight: 700;
-      }
+            .link {
+                color: var(--accent);
+                text-decoration: none;
+                font-weight: 700;
+            }
 
-      .link:hover {
-        text-decoration: underline;
-      }
+            .link:hover {
+                text-decoration: underline;
+            }
 
-      .summary {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 14px;
-        margin-bottom: 16px;
-      }
+            .summary {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 14px;
+                margin-bottom: 16px;
+            }
 
-      .card {
-        padding: 18px 18px 16px;
-      }
+            .card {
+                padding: 18px 18px 16px;
+            }
 
-      .card-label {
-        color: var(--muted);
-        font-size: 0.85rem;
-      }
+            .card-label {
+                color: var(--muted);
+                font-size: 0.85rem;
+            }
 
-      .card-value {
-        margin-top: 8px;
-        font-size: 1.65rem;
-        font-weight: 800;
-      }
+            .card-value {
+                margin-top: 8px;
+                font-size: 1.65rem;
+                font-weight: 800;
+            }
 
-      .card-meta {
-        margin-top: 6px;
-        color: var(--muted);
-        font-size: 0.86rem;
-      }
+            .card-meta {
+                margin-top: 6px;
+                color: var(--muted);
+                font-size: 0.86rem;
+            }
 
-      .panel {
-        padding: 18px;
-        margin-bottom: 16px;
-      }
+            .panel {
+                padding: 18px;
+                margin-bottom: 16px;
+            }
 
-      .panel h2 {
-        font-size: 1.1rem;
-      }
+            .panel h2 {
+                font-size: 1.1rem;
+            }
 
-      .table-wrap {
-        margin-top: 14px;
-        overflow-x: auto;
-        border: 1px solid var(--line);
-        border-radius: 16px;
-      }
+            .table-wrap {
+                margin-top: 14px;
+                overflow-x: auto;
+                border: 1px solid var(--line);
+                border-radius: 16px;
+            }
 
-      table {
-        width: 100%;
-        min-width: 1520px;
-        border-collapse: collapse;
-      }
+            table {
+                width: 100%;
+                min-width: 1640px;
+                border-collapse: collapse;
+            }
 
-      th,
-      td {
-        padding: 12px 12px;
-        border-bottom: 1px solid var(--line);
-        text-align: left;
-        vertical-align: middle;
-        font-size: 0.92rem;
-        white-space: nowrap;
-      }
+            th,
+            td {
+                padding: 12px 12px;
+                border-bottom: 1px solid var(--line);
+                text-align: left;
+                vertical-align: middle;
+                font-size: 0.92rem;
+                white-space: nowrap;
+            }
 
-      th {
-        background: #f7faff;
-        color: #263246;
-        font-weight: 800;
-      }
+            th {
+                background: #f7faff;
+                color: #263246;
+                font-weight: 800;
+            }
 
-      tr:last-child td {
-        border-bottom: none;
-      }
+            tr:last-child td {
+                border-bottom: none;
+            }
 
-      .is-baseline {
-        background: rgba(20, 88, 255, 0.04);
-      }
+            .is-baseline {
+                background: rgba(20, 88, 255, 0.04);
+            }
 
-      .model-cell {
-        min-width: 210px;
-      }
+            .model-cell {
+                min-width: 210px;
+            }
 
-      .model-name {
-        font-weight: 800;
-      }
+            .model-name {
+                font-weight: 800;
+            }
 
-      .baseline-tag {
-        display: inline-flex;
-        margin-left: 8px;
-        padding: 3px 8px;
-        border-radius: 999px;
-        background: rgba(20, 88, 255, 0.12);
-        color: var(--accent);
-        font-size: 0.75rem;
-        font-weight: 800;
-      }
+            .baseline-tag {
+                display: inline-flex;
+                margin-left: 8px;
+                padding: 3px 8px;
+                border-radius: 999px;
+                background: rgba(20, 88, 255, 0.12);
+                color: var(--accent);
+                font-size: 0.75rem;
+                font-weight: 800;
+            }
 
-      .total-score {
-        font-size: 1.05rem;
-        font-weight: 900;
-      }
+            .total-score {
+                font-size: 1.05rem;
+                font-weight: 900;
+            }
 
-      .score-pill {
-        display: inline-flex;
-        padding: 4px 8px;
-        border-radius: 999px;
-        font-weight: 800;
-        font-size: 0.8rem;
-      }
+            .score-pill {
+                display: inline-flex;
+                padding: 4px 8px;
+                border-radius: 999px;
+                font-weight: 800;
+                font-size: 0.8rem;
+            }
 
-      .score-pill.good {
-        background: var(--good-bg);
-        color: var(--good-text);
-      }
+            .score-pill.good {
+                background: var(--good-bg);
+                color: var(--good-text);
+            }
 
-      .score-pill.mid {
-        background: var(--mid-bg);
-        color: var(--mid-text);
-      }
+            .score-pill.mid {
+                background: var(--mid-bg);
+                color: var(--mid-text);
+            }
 
-      .score-pill.low {
-        background: var(--low-bg);
-        color: var(--low-text);
-      }
+            .score-pill.low {
+                background: var(--low-bg);
+                color: var(--low-text);
+            }
 
-      .prompt-box {
-        margin-top: 14px;
-      }
+            .prompt-box {
+                margin-top: 14px;
+            }
 
-      .prompt-box summary {
-        cursor: pointer;
-        font-weight: 800;
-      }
+            .prompt-box summary {
+                cursor: pointer;
+                font-weight: 800;
+            }
 
-      .prompt-content {
-        margin-top: 12px;
-        padding: 14px 16px;
-        border-radius: 16px;
-        background: #0f1726;
-        color: #dce7ff;
-        border: 1px solid #263246;
-        white-space: pre-wrap;
-        line-height: 1.65;
-        overflow-x: auto;
-        font-family:
-          "JetBrains Mono",
-          "SFMono-Regular",
-          Menlo,
-          Consolas,
-          monospace;
-      }
+            .prompt-content {
+                margin-top: 12px;
+                padding: 14px 16px;
+                border-radius: 16px;
+                background: #0f1726;
+                color: #dce7ff;
+                border: 1px solid #263246;
+                white-space: pre-wrap;
+                line-height: 1.65;
+                overflow-x: auto;
+                font-family:
+                    "JetBrains Mono", "SFMono-Regular", Menlo, Consolas,
+                    monospace;
+            }
 
-      .rubric-detail {
-        color: var(--text);
-      }
+            .rubric-detail {
+                color: var(--text);
+            }
 
-      .rubric-subitems {
-        margin: 10px 0 0;
-        padding-left: 18px;
-        color: var(--muted);
-      }
+            .rubric-subitems {
+                margin: 10px 0 0;
+                padding-left: 18px;
+                color: var(--muted);
+            }
 
-      .rubric-subitems li {
-        margin-bottom: 8px;
-        line-height: 1.6;
-      }
+            .rubric-subitems li {
+                margin-bottom: 8px;
+                line-height: 1.6;
+            }
 
-      .rubric-subitems li:last-child {
-        margin-bottom: 0;
-      }
+            .rubric-subitems li:last-child {
+                margin-bottom: 0;
+            }
 
-      .rubric-subitems strong {
-        color: var(--text);
-      }
+            .rubric-subitems strong {
+                color: var(--text);
+            }
 
-      .rubric-subitems span {
-        margin-left: 8px;
-      }
+            .rubric-subitems span {
+                margin-left: 8px;
+            }
 
-      @media (max-width: 780px) {
-        .container {
-          width: min(100vw - 14px, 100%);
-          padding-top: 14px;
-        }
+            @media (max-width: 780px) {
+                .container {
+                    width: min(100vw - 14px, 100%);
+                    padding-top: 14px;
+                }
 
-        .hero,
-        .panel,
-        .card {
-          padding-left: 14px;
-          padding-right: 14px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="container">
-      <section class="hero">
-        <div class="eyebrow">Automated Benchmark</div>
-        <h1>模型编程性能测试汇总</h1>
-        <p class="sub">自动化评测于 2026-04-14 10:48:44 CST 使用 Playwright Core + Google Chrome Headless 执行，桌面端视口为 1440×900，移动端视口为 390×844。</p>
-        <p class="sub">GitHub：<a class="link" href="https://github.com/versun/coding-model-comparison" target="_blank" rel="noopener noreferrer">https://github.com/versun/coding-model-comparison</a></p>
-      </section>
+                .hero,
+                .panel,
+                .card {
+                    padding-left: 14px;
+                    padding-right: 14px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main class="container">
+            <section class="hero">
+                <div class="eyebrow">Automated Benchmark</div>
+                <h1>模型编程性能测试汇总</h1>
+                <p class="sub">
+                    自动化评测于 2026-04-17 14:17:56 CST 使用 Playwright Core +
+                    Google Chrome Headless 执行，桌面端视口为
+                    1440×900，移动端视口为 390×844。
+                </p>
+                <p class="sub">
+                    GitHub：<a
+                        class="link"
+                        href="https://github.com/versun/coding-model-comparison"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >https://github.com/versun/coding-model-comparison</a
+                    >
+                </p>
+            </section>
 
-      <section class="summary">
-        <article class="card">
-          <div class="card-label">参与模型数</div>
-          <div class="card-value">16</div>
-        </article>
-        <article class="card">
-          <div class="card-label">最高总分</div>
-          <div class="card-value">KAT-Coder-Pro V2</div>
-          <div class="card-meta">97 / 100</div>
-        </article>
-        <article class="card">
-          <div class="card-label">最快完成模型</div>
-          <div class="card-value">Step 3.5 Flash</div>
-          <div class="card-meta">完成时间：41秒</div>
-        </article>
-        <article class="card">
-          <div class="card-label">平均分</div>
-          <div class="card-value">78.7</div>
-          <div class="card-meta">交互项最强：KAT-Coder-Pro V2</div>
-        </article>
-      </section>
+            <section class="summary">
+                <article class="card">
+                    <div class="card-label">参与模型数</div>
+                    <div class="card-value">17</div>
+                </article>
+                <article class="card">
+                    <div class="card-label">最高总分</div>
+                    <div class="card-value">KAT-Coder-Pro V2</div>
+                    <div class="card-meta">98 / 100</div>
+                </article>
+                <article class="card">
+                    <div class="card-label">最快完成模型</div>
+                    <div class="card-value">Step 3.5 Flash</div>
+                    <div class="card-meta">完成时间：41秒</div>
+                </article>
+                <article class="card">
+                    <div class="card-label">平均分</div>
+                    <div class="card-value">79.5</div>
+                    <div class="card-meta">交互项最强：KAT-Coder-Pro V2</div>
+                </article>
+            </section>
 
-      <section class="panel">
-        <h2>测试提示词</h2>
-        <details class="prompt-box">
-          <summary>展开查看原始 Prompt</summary>
-          <pre class="prompt-content">不要使用任何的mcp和skill，请编写一个单文件的 HTML/JS 应用（不使用构建工具，使用 CDN 引入 React 和 D3.js）。
+            <section class="panel">
+                <h2>测试提示词</h2>
+                <details class="prompt-box">
+                    <summary>展开查看原始 Prompt</summary>
+                    <pre class="prompt-content">
+不要使用任何的mcp和skill，请编写一个单文件的 HTML/JS 应用（不使用构建工具，使用 CDN 引入 React 和 D3.js）。
 功能：
 
 生成 100 个随机数据点。
@@ -354,402 +369,1641 @@
 
 实现交互：鼠标悬停节点显示 Tooltip，点击节点高亮其相邻节点，支持滚轮缩放画布。
 
-UI 风格要求现代、极简、暗色模式。</pre>
-        </details>
-      </section>
+UI 风格要求现代、极简、暗色模式。</pre
+                    >
+                </details>
+            </section>
 
-      <section class="panel">
-        <h2>自动化评测结果</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>排名</th>
-                <th>模型</th>
-                <th>总分</th>
-                <th>运行环境</th>
-                <th>完成时间</th>
-                <th>节点</th>
-                <th>边</th>
-                <th>渲染稳定</th>
-                <th>图数据</th>
-                <th>Tooltip</th>
-                <th>邻接高亮</th>
-                <th>缩放</th>
-                <th>信息架构</th>
-                <th>暗色主题</th>
-                <th>移动端</th>
-                <th>成果</th>
-              </tr>
-            </thead>
-            <tbody>
-              
-        <tr class="">
-          <td>1</td>
-          <td class="model-cell">
-            <span class="model-name">KAT-Coder-Pro V2</span>
-          </td>
-          <td><span class="total-score">97</span></td>
-          <td>Claude Code</td>
-          <td>48秒</td>
-          <td>100</td>
-          <td>368</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 4/4&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill good">20/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill mid">5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="kat-coder-pro-v2.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>2</td>
-          <td class="model-cell">
-            <span class="model-name">GPT 5.4</span>
-          </td>
-          <td><span class="total-score">97</span></td>
-          <td>Codex CLI</td>
-          <td>4分 20秒</td>
-          <td>100</td>
-          <td>234</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 4/4&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill good">19/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 1/1"><span class="score-pill good">6/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="gpt-5.4.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>3</td>
-          <td class="model-cell">
-            <span class="model-name">Opus 4.6</span>
-          </td>
-          <td><span class="total-score">95</span></td>
-          <td>Claude Code</td>
-          <td>53秒</td>
-          <td>100</td>
-          <td>158</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 4/4&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill good">19/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 0.5/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill mid">4/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="opus-4.6.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>4</td>
-          <td class="model-cell">
-            <span class="model-name">Qwen3.6 Plus Preview</span>
-          </td>
-          <td><span class="total-score">95</span></td>
-          <td>Claude Code</td>
-          <td>3分 46秒</td>
-          <td>100</td>
-          <td>121</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 4/4&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill good">19/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 0.5/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill mid">4/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="qwen3.6-plus-preview.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>5</td>
-          <td class="model-cell">
-            <span class="model-name">GLM 5</span>
-          </td>
-          <td><span class="total-score">94</span></td>
-          <td>Claude Code</td>
-          <td>2分 14秒</td>
-          <td>100</td>
-          <td>287</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 4/4&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"><span class="score-pill good">19/20</span></td><td title="目标节点反馈: 0/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 2/2&#10;高亮响应可重复: 2/2"><span class="score-pill mid">16/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill mid">5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="glm-5.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>6</td>
-          <td class="model-cell">
-            <span class="model-name">Claude Sonnet 4.6</span>
-          </td>
-          <td><span class="total-score">93.5</span></td>
-          <td>Claude Code</td>
-          <td>1分 2秒</td>
-          <td>100</td>
-          <td>234</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/4&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"><span class="score-pill good">17/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill mid">4.5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="claude-sonnet-4.6.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>7</td>
-          <td class="model-cell">
-            <span class="model-name">GPT 5.3 Codex</span>
-          </td>
-          <td><span class="total-score">92.5</span></td>
-          <td>Codex CLI</td>
-          <td>1分 40秒</td>
-          <td>100</td>
-          <td>260</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/4&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill good">17/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 0/1&#10;说明文案: 2/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 1/1"><span class="score-pill mid">3.5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="gpt-5.3-codex.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>8</td>
-          <td class="model-cell">
-            <span class="model-name">Gemini 3.1 Pro Preview</span>
-          </td>
-          <td><span class="total-score">92</span></td>
-          <td>Claude Code</td>
-          <td>2分 15秒</td>
-          <td>100</td>
-          <td>145</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 4/4&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill good">19/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 2/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill mid">16/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 1.5/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill low">3/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="gemini-3.1-pro-preview.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>9</td>
-          <td class="model-cell">
-            <span class="model-name">Kimi 2.6 Code Preview</span>
-          </td>
-          <td><span class="total-score">89</span></td>
-          <td>Claude Code</td>
-          <td>1分 21秒</td>
-          <td>100</td>
-          <td>210</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/4&#10;Tooltip 字段丰富度: 1/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill mid">13/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 0.5/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill mid">4/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="kimi2.6.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>10</td>
-          <td class="model-cell">
-            <span class="model-name">Kimi 2.5</span>
-          </td>
-          <td><span class="total-score">83</span></td>
-          <td>Claude Code</td>
-          <td>1分 53秒</td>
-          <td>100</td>
-          <td>191</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/4&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"><span class="score-pill good">17/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 1/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill low">7/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill mid">5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="kimi-2.5.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>11</td>
-          <td class="model-cell">
-            <span class="model-name">GPT 5.4 Mini</span>
-          </td>
-          <td><span class="total-score">83</span></td>
-          <td>Codex CLI</td>
-          <td>4分 14秒</td>
-          <td>100</td>
-          <td>197</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/4&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"><span class="score-pill good">17/20</span></td><td title="目标节点反馈: 0/4&#10;节点层区分: 0/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill low">6/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 1/1"><span class="score-pill good">6/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="gpt-5.4-mini.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>12</td>
-          <td class="model-cell">
-            <span class="model-name">Minimax 2.7</span>
-          </td>
-          <td><span class="total-score">79.5</span></td>
-          <td>Claude Code</td>
-          <td>1分 03秒</td>
-          <td>100</td>
-          <td>237</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 5/5&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/4&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"><span class="score-pill mid">16/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 1/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill low">7/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 1/1&#10;说明文案: 1/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill low">2.5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="minimax-m2.7.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>13</td>
-          <td class="model-cell">
-            <span class="model-name">Minimax 2.5</span>
-          </td>
-          <td><span class="total-score">72.5</span></td>
-          <td>Claude Code</td>
-          <td>2分 38秒</td>
-          <td>100</td>
-          <td>204</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 8/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">18/18</span></td><td title="悬停后 Tooltip 可见: 0/5&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/4&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"><span class="score-pill low">0/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 0/1&#10;说明文案: 0/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill low">0.5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="minimax-2.5.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>14</td>
-          <td class="model-cell">
-            <span class="model-name">Mimo V2 Pro</span>
-          </td>
-          <td><span class="total-score">71.5</span></td>
-          <td>Claude Code</td>
-          <td>1分 03秒</td>
-          <td>105</td>
-          <td>190</td>
-          <td title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"><span class="score-pill good">10/10</span></td><td title="节点数量接近 100: 6/8&#10;边数量充分: 4/4&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"><span class="score-pill good">16/18</span></td><td title="悬停后 Tooltip 可见: 0/5&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/4&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"><span class="score-pill low">0/20</span></td><td title="目标节点反馈: 4/4&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 2/2"><span class="score-pill good">18/20</span></td><td title="检测到缩放响应: 5/5&#10;缩放幅度: 4/4&#10;缩放变换被记录: 2/2&#10;缩放比例可读: 1/1"><span class="score-pill good">12/12</span></td><td title="标题层级: 0/1&#10;说明文案: 1/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill low">1.5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"><span class="score-pill good">8/8</span></td>
-          <td>
-            <a class="link" href="mimo-v2-pro.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>15</td>
-          <td class="model-cell">
-            <span class="model-name">Step 3.5 Flash</span>
-          </td>
-          <td><span class="total-score">12.5</span></td>
-          <td>Claude Code</td>
-          <td>41秒</td>
-          <td>0</td>
-          <td>0</td>
-          <td title="可交互 SVG 已渲染: 0/4&#10;目标节点可定位: 0/1&#10;节点达到最低可用量: 0/1&#10;边达到最低可用量: 0/1&#10;无 pageerror: 0/2&#10;无 console error: 1/1"><span class="score-pill low">1/10</span></td><td title="节点数量接近 100: 0/8&#10;边数量充分: 0/4&#10;图探针可用: 0/2&#10;图区域高度充足: 0/2&#10;图区域宽度充足: 0/2"><span class="score-pill low">0/18</span></td><td title="悬停后 Tooltip 可见: 0/5&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/4&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"><span class="score-pill low">0/20</span></td><td title="目标节点反馈: 0/4&#10;节点层区分: 0/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 0/2"><span class="score-pill low">0/20</span></td><td title="检测到缩放响应: 0/5&#10;缩放幅度: 0/4&#10;缩放变换被记录: 0/2&#10;缩放比例可读: 1/1"><span class="score-pill low">1/12</span></td><td title="标题层级: 0/1&#10;说明文案: 0/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill low">0.5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 0/2&#10;节点保留率: 0/2&#10;移动端元信息: 1/1"><span class="score-pill low">4/8</span></td>
-          <td>
-            <a class="link" href="step-3.5-flash.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-        <tr class="">
-          <td>16</td>
-          <td class="model-cell">
-            <span class="model-name">GLM 5V Turbo</span>
-          </td>
-          <td><span class="total-score">11.5</span></td>
-          <td>Claude Code</td>
-          <td>59秒</td>
-          <td>0</td>
-          <td>0</td>
-          <td title="可交互 SVG 已渲染: 0/4&#10;目标节点可定位: 0/1&#10;节点达到最低可用量: 0/1&#10;边达到最低可用量: 0/1&#10;无 pageerror: 0/2&#10;无 console error: 0/1"><span class="score-pill low">0/10</span></td><td title="节点数量接近 100: 0/8&#10;边数量充分: 0/4&#10;图探针可用: 0/2&#10;图区域高度充足: 0/2&#10;图区域宽度充足: 0/2"><span class="score-pill low">0/18</span></td><td title="悬停后 Tooltip 可见: 0/5&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/4&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"><span class="score-pill low">0/20</span></td><td title="目标节点反馈: 0/4&#10;节点层区分: 0/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/2&#10;高亮响应可重复: 0/2"><span class="score-pill low">0/20</span></td><td title="检测到缩放响应: 0/5&#10;缩放幅度: 0/4&#10;缩放变换被记录: 0/2&#10;缩放比例可读: 1/1"><span class="score-pill low">1/12</span></td><td title="标题层级: 0/1&#10;说明文案: 0/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"><span class="score-pill low">0.5/6</span></td><td title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"><span class="score-pill good">6/6</span></td><td title="无明显横向溢出: 3/3&#10;图区域高度: 0/2&#10;节点保留率: 0/2&#10;移动端元信息: 1/1"><span class="score-pill low">4/8</span></td>
-          <td>
-            <a class="link" href="glm-5v-turbo.html" target="_blank" rel="noopener noreferrer">查看页面</a>
-          </td>
-        </tr>
-      
-            </tbody>
-          </table>
-        </div>
-      </section>
+            <section class="panel">
+                <h2>自动化评测结果</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>排名</th>
+                                <th>模型</th>
+                                <th>总分</th>
+                                <th>运行环境</th>
+                                <th>完成时间</th>
+                                <th>节点</th>
+                                <th>边</th>
+                                <th>渲染稳定</th>
+                                <th>图数据</th>
+                                <th>Tooltip</th>
+                                <th>邻接高亮</th>
+                                <th>缩放</th>
+                                <th>交互完整度</th>
+                                <th>信息架构</th>
+                                <th>暗色主题</th>
+                                <th>移动端</th>
+                                <th>成果</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="">
+                                <td>1</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >KAT-Coder-Pro V2</span
+                                    >
+                                </td>
+                                <td><span class="total-score">98</span></td>
+                                <td>Claude Code</td>
+                                <td>48秒</td>
+                                <td>100</td>
+                                <td>370</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 3/3&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">18/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 1/1&#10;图例说明: 1/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="kat-coder-pro-v2.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
 
-      <section class="panel">
-        <h2>评分细则</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>维度</th>
-                <th>分值</th>
-                <th>自动化检测方式</th>
-              </tr>
-            </thead>
-            <tbody>
-              
-      <tr>
-        <td>渲染稳定性</td>
-        <td>10</td>
-        <td>
-          <div class="rubric-detail">检查页面是否稳定完成首次渲染，并且交互探针能够正常工作。</div>
-          <ul class="rubric-subitems">
-            <li><strong>可交互 SVG 已渲染</strong><span>4 分</span><span>存在可见 SVG 且页面进入可评估状态。</span></li><li><strong>目标节点可定位</strong><span>1 分</span><span>自动化能锁定一个真实节点作为后续交互探针。</span></li><li><strong>节点达到最低可用量</strong><span>1 分</span><span>可见节点数达到基础可用阈值。</span></li><li><strong>边达到最低可用量</strong><span>1 分</span><span>可见边数达到基础可用阈值。</span></li><li><strong>无 pageerror</strong><span>2 分</span><span>运行期无致命页面异常。</span></li><li><strong>无 console error</strong><span>1 分</span><span>控制台未出现错误级日志。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-      <tr>
-        <td>图数据完整度</td>
-        <td>18</td>
-        <td>
-          <div class="rubric-detail">评估节点数量、边数量以及图区域是否足够完整。</div>
-          <ul class="rubric-subitems">
-            <li><strong>节点数量接近 100</strong><span>8 分</span><span>对 100 个随机数据点的还原是否准确。</span></li><li><strong>边数量充分</strong><span>4 分</span><span>图结构是否具备足够的连边密度。</span></li><li><strong>图探针可用</strong><span>2 分</span><span>自动化可定位中心节点并用于交互探测。</span></li><li><strong>图区域高度充足</strong><span>2 分</span><span>图表占据了足够的垂直空间。</span></li><li><strong>图区域宽度充足</strong><span>2 分</span><span>图表占据了足够的水平空间。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-      <tr>
-        <td>Tooltip 交互</td>
-        <td>20</td>
-        <td>
-          <div class="rubric-detail">检查悬停反馈是否存在、信息是否丰富、字段是否足够完整。</div>
-          <ul class="rubric-subitems">
-            <li><strong>悬停后 Tooltip 可见</strong><span>5 分</span><span>悬停真实节点后出现 Tooltip。</span></li><li><strong>Tooltip 可重复触发</strong><span>3 分</span><span>多次独立探测时 Tooltip 能稳定出现，而不是只偶发成功。</span></li><li><strong>Tooltip 文本长度</strong><span>4 分</span><span>Tooltip 提供了足够的信息量，而不是只显示一个短标签。</span></li><li><strong>Tooltip 字段丰富度</strong><span>3 分</span><span>Tooltip 中包含多行、多块或多字段信息。</span></li><li><strong>Tooltip 信息结构</strong><span>3 分</span><span>Tooltip 不是单一值，而是能读出多项语义信息。</span></li><li><strong>Tooltip 探针一致性</strong><span>2 分</span><span>页面中存在稳定的 Tooltip 容器或明确唯一的候选。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-      <tr>
-        <td>邻接高亮</td>
-        <td>20</td>
-        <td>
-          <div class="rubric-detail">检查点击后是否能区分目标节点、相邻节点与非相邻节点。</div>
-          <ul class="rubric-subitems">
-            <li><strong>目标节点反馈</strong><span>4 分</span><span>被点击节点自身出现明显状态变化。</span></li><li><strong>节点层区分</strong><span>4 分</span><span>节点样式在点击后出现充分变化。</span></li><li><strong>边层区分</strong><span>4 分</span><span>连边样式在点击后出现足够变化。</span></li><li><strong>非邻接节点弱化</strong><span>4 分</span><span>非相邻节点被显著弱化或降低透明度。</span></li><li><strong>高亮语义标记</strong><span>2 分</span><span>存在 highlighted/selected/active 等可识别语义类。</span></li><li><strong>高亮响应可重复</strong><span>2 分</span><span>多次独立点击探测时，高亮响应能稳定复现。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-      <tr>
-        <td>缩放能力</td>
-        <td>12</td>
-        <td>
-          <div class="rubric-detail">检查滚轮缩放是否生效，以及缩放变化是否足够明显。</div>
-          <ul class="rubric-subitems">
-            <li><strong>检测到缩放响应</strong><span>5 分</span><span>对图区域滚轮操作后容器状态发生变化。</span></li><li><strong>缩放幅度</strong><span>4 分</span><span>缩放比例的变化足够明显。</span></li><li><strong>缩放变换被记录</strong><span>2 分</span><span>transform / viewBox 等状态明显变化。</span></li><li><strong>缩放比例可读</strong><span>1 分</span><span>缩放前后比例为可解析的有效数字。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-      <tr>
-        <td>信息架构</td>
-        <td>6</td>
-        <td>
-          <div class="rubric-detail">检查页面是否提供标题、说明、辅助信息与基础可访问性。</div>
-          <ul class="rubric-subitems">
-            <li><strong>标题层级</strong><span>1 分</span><span>存在明确标题或标题层级。</span></li><li><strong>说明文案</strong><span>2 分</span><span>提供足够的说明、帮助或上下文文案。</span></li><li><strong>辅助信息块</strong><span>1 分</span><span>提供统计、面板、摘要等辅助信息块。</span></li><li><strong>控制与摘要入口</strong><span>0.5 分</span><span>存在按钮、链接或摘要式操作入口。</span></li><li><strong>移动端 viewport 元信息</strong><span>0.5 分</span><span>声明了 viewport，便于移动端正确缩放。</span></li><li><strong>图表可访问性标识</strong><span>1 分</span><span>为 SVG 或图表区域提供 ARIA 语义。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-      <tr>
-        <td>暗色主题</td>
-        <td>6</td>
-        <td>
-          <div class="rubric-detail">检查背景是否足够深、正文是否足够亮、整体对比是否达标。</div>
-          <ul class="rubric-subitems">
-            <li><strong>背景亮度</strong><span>3 分</span><span>截图采样的平均背景亮度足够低。</span></li><li><strong>正文亮度</strong><span>2 分</span><span>正文颜色足够亮，能够形成暗色界面阅读对比。</span></li><li><strong>整体明暗对比</strong><span>1 分</span><span>背景与文本之间保持足够的亮度差。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-      <tr>
-        <td>移动端适配</td>
-        <td>8</td>
-        <td>
-          <div class="rubric-detail">在 390px 宽视口下检查溢出、图高度、节点保留率和基础元信息。</div>
-          <ul class="rubric-subitems">
-            <li><strong>无明显横向溢出</strong><span>3 分</span><span>移动端滚动宽度与视口宽度接近。</span></li><li><strong>图区域高度</strong><span>2 分</span><span>移动端仍保留足够的图表高度。</span></li><li><strong>节点保留率</strong><span>2 分</span><span>移动端仍能看到足够数量的节点。</span></li><li><strong>移动端元信息</strong><span>1 分</span><span>页面声明了 viewport，利于移动端布局。</span></li>
-          </ul>
-        </td>
-      </tr>
-    
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-  </body>
+                            <tr class="">
+                                <td>2</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >Claude Opus 4.7</span
+                                    >
+                                </td>
+                                <td><span class="total-score">97</span></td>
+                                <td>Claude Code</td>
+                                <td>1分 10秒</td>
+                                <td>100</td>
+                                <td>192</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/3&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 1/1&#10;图例说明: 1/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="claude-opus-4.7.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>3</td>
+                                <td class="model-cell">
+                                    <span class="model-name">GPT 5.4</span>
+                                </td>
+                                <td><span class="total-score">95</span></td>
+                                <td>Codex CLI</td>
+                                <td>4分 20秒</td>
+                                <td>100</td>
+                                <td>234</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 0/1"
+                                >
+                                    <span class="score-pill good">9/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 3/3&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="gpt-5.4.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>4</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >Claude Opus 4.6</span
+                                    >
+                                </td>
+                                <td><span class="total-score">94</span></td>
+                                <td>Claude Code</td>
+                                <td>53秒</td>
+                                <td>100</td>
+                                <td>158</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 3/3&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 0.5/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">4/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="opus-4.6.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>5</td>
+                                <td class="model-cell">
+                                    <span class="model-name">GLM 5</span>
+                                </td>
+                                <td><span class="total-score">94</span></td>
+                                <td>Claude Code</td>
+                                <td>2分 14秒</td>
+                                <td>100</td>
+                                <td>287</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 3/3&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 0/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 1/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill mid">15/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 1/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill good">7/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="glm-5.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>6</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >Qwen3.6 Plus Preview</span
+                                    >
+                                </td>
+                                <td><span class="total-score">94</span></td>
+                                <td>Claude Code</td>
+                                <td>3分 46秒</td>
+                                <td>100</td>
+                                <td>121</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 3/3&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 2/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 1/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 0.5/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">4/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="qwen3.6-plus-preview.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>7</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >Claude Sonnet 4.6</span
+                                    >
+                                </td>
+                                <td><span class="total-score">93.5</span></td>
+                                <td>Claude Code</td>
+                                <td>1分 2秒</td>
+                                <td>100</td>
+                                <td>234</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/3&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"
+                                >
+                                    <span class="score-pill good">16/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">4.5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="claude-sonnet-4.6.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>8</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >GPT 5.3 Codex</span
+                                    >
+                                </td>
+                                <td><span class="total-score">92.5</span></td>
+                                <td>Codex CLI</td>
+                                <td>1分 40秒</td>
+                                <td>100</td>
+                                <td>261</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/3&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">16/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 0/1&#10;说明文案: 2/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 1/1"
+                                >
+                                    <span class="score-pill mid">3.5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="gpt-5.3-codex.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>9</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >Gemini 3.1 Pro Preview</span
+                                    >
+                                </td>
+                                <td><span class="total-score">91</span></td>
+                                <td>Claude Code</td>
+                                <td>2分 15秒</td>
+                                <td>100</td>
+                                <td>145</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 3/3&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 2/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill mid">15/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 1.5/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill low">3/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="gemini-3.1-pro-preview.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>10</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >Kimi 2.6 Code Preview</span
+                                    >
+                                </td>
+                                <td><span class="total-score">90</span></td>
+                                <td>Claude Code</td>
+                                <td>1分 21秒</td>
+                                <td>100</td>
+                                <td>211</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/3&#10;Tooltip 字段丰富度: 1/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill mid">12/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 1/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill good">7/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 0.5/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">4/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="kimi2.6.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>11</td>
+                                <td class="model-cell">
+                                    <span class="model-name">Kimi 2.5</span>
+                                </td>
+                                <td><span class="total-score">84</span></td>
+                                <td>Claude Code</td>
+                                <td>1分 53秒</td>
+                                <td>100</td>
+                                <td>190</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/3&#10;Tooltip 字段丰富度: 3/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"
+                                >
+                                    <span class="score-pill good">16/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 1/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill low">6/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 1/1&#10;图例说明: 1/1&#10;操作提示: 0/1"
+                                >
+                                    <span class="score-pill good">7/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill mid">5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="kimi-2.5.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>12</td>
+                                <td class="model-cell">
+                                    <span class="model-name">GPT 5.4 Mini</span>
+                                </td>
+                                <td><span class="total-score">84</span></td>
+                                <td>Codex CLI</td>
+                                <td>4分 14秒</td>
+                                <td>100</td>
+                                <td>197</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/3&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 2/2"
+                                >
+                                    <span class="score-pill good">16/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 0/3&#10;节点层区分: 0/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill low">6/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 2/2&#10;辅助信息块: 1/1&#10;控制与摘要入口: 0.5/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="gpt-5.4-mini.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>13</td>
+                                <td class="model-cell">
+                                    <span class="model-name">Minimax 2.7</span>
+                                </td>
+                                <td><span class="total-score">79.5</span></td>
+                                <td>Claude Code</td>
+                                <td>1分 03秒</td>
+                                <td>100</td>
+                                <td>235</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 4/4&#10;Tooltip 可重复触发: 3/3&#10;Tooltip 文本长度: 2/3&#10;Tooltip 字段丰富度: 2/3&#10;Tooltip 信息结构: 3/3&#10;Tooltip 探针一致性: 1/2"
+                                >
+                                    <span class="score-pill mid">15/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 1/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill low">6/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 1/1"
+                                >
+                                    <span class="score-pill mid">6/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 1/1&#10;说明文案: 1/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill low">2.5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="minimax-m2.7.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>14</td>
+                                <td class="model-cell">
+                                    <span class="model-name">Mimo V2 Pro</span>
+                                </td>
+                                <td><span class="total-score">71.5</span></td>
+                                <td>Claude Code</td>
+                                <td>1分 03秒</td>
+                                <td>105</td>
+                                <td>190</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 5/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">14/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 0/4&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/3&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"
+                                >
+                                    <span class="score-pill low">0/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 3/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 0/1"
+                                >
+                                    <span class="score-pill mid">5/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 0/1&#10;说明文案: 1/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill low">1.5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="mimo-v2-pro.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>15</td>
+                                <td class="model-cell">
+                                    <span class="model-name">Minimax 2.5</span>
+                                </td>
+                                <td><span class="total-score">71.5</span></td>
+                                <td>Claude Code</td>
+                                <td>2分 38秒</td>
+                                <td>100</td>
+                                <td>205</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 4/4&#10;目标节点可定位: 1/1&#10;节点达到最低可用量: 1/1&#10;边达到最低可用量: 1/1&#10;无 pageerror: 2/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 7/7&#10;边数量充分: 3/3&#10;图探针可用: 2/2&#10;图区域高度充足: 2/2&#10;图区域宽度充足: 2/2"
+                                >
+                                    <span class="score-pill good">16/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 0/4&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/3&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"
+                                >
+                                    <span class="score-pill low">0/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 3/3&#10;节点层区分: 4/4&#10;边层区分: 4/4&#10;非邻接节点弱化: 4/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 2/2"
+                                >
+                                    <span class="score-pill good">17/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 4/4&#10;缩放幅度: 3/3&#10;缩放变换被记录: 2/2&#10;缩放响应可重复: 1/1"
+                                >
+                                    <span class="score-pill good">10/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 2/3&#10;拖拽可重复: 1/1&#10;游标反馈: 1/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 0/1"
+                                >
+                                    <span class="score-pill low">4/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 0/1&#10;说明文案: 0/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill low">0.5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 2/2&#10;节点保留率: 2/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill good">8/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="minimax-2.5.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>16</td>
+                                <td class="model-cell">
+                                    <span class="model-name"
+                                        >Step 3.5 Flash</span
+                                    >
+                                </td>
+                                <td><span class="total-score">11.5</span></td>
+                                <td>Claude Code</td>
+                                <td>41秒</td>
+                                <td>0</td>
+                                <td>0</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 0/4&#10;目标节点可定位: 0/1&#10;节点达到最低可用量: 0/1&#10;边达到最低可用量: 0/1&#10;无 pageerror: 0/2&#10;无 console error: 1/1"
+                                >
+                                    <span class="score-pill low">1/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 0/7&#10;边数量充分: 0/3&#10;图探针可用: 0/2&#10;图区域高度充足: 0/2&#10;图区域宽度充足: 0/2"
+                                >
+                                    <span class="score-pill low">0/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 0/4&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/3&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"
+                                >
+                                    <span class="score-pill low">0/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 0/3&#10;节点层区分: 0/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 0/2"
+                                >
+                                    <span class="score-pill low">0/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 0/4&#10;缩放幅度: 0/3&#10;缩放变换被记录: 0/2&#10;缩放响应可重复: 0/1"
+                                >
+                                    <span class="score-pill low">0/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 0/3&#10;拖拽可重复: 0/1&#10;游标反馈: 0/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 0/1"
+                                >
+                                    <span class="score-pill low">0/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 0/1&#10;说明文案: 0/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill low">0.5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 0/2&#10;节点保留率: 0/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill low">4/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="step-3.5-flash.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+
+                            <tr class="">
+                                <td>17</td>
+                                <td class="model-cell">
+                                    <span class="model-name">GLM 5V Turbo</span>
+                                </td>
+                                <td><span class="total-score">10.5</span></td>
+                                <td>Claude Code</td>
+                                <td>59秒</td>
+                                <td>0</td>
+                                <td>0</td>
+                                <td
+                                    title="可交互 SVG 已渲染: 0/4&#10;目标节点可定位: 0/1&#10;节点达到最低可用量: 0/1&#10;边达到最低可用量: 0/1&#10;无 pageerror: 0/2&#10;无 console error: 0/1"
+                                >
+                                    <span class="score-pill low">0/10</span>
+                                </td>
+                                <td
+                                    title="节点数量接近 100: 0/7&#10;边数量充分: 0/3&#10;图探针可用: 0/2&#10;图区域高度充足: 0/2&#10;图区域宽度充足: 0/2"
+                                >
+                                    <span class="score-pill low">0/16</span>
+                                </td>
+                                <td
+                                    title="悬停后 Tooltip 可见: 0/4&#10;Tooltip 可重复触发: 0/3&#10;Tooltip 文本长度: 0/3&#10;Tooltip 字段丰富度: 0/3&#10;Tooltip 信息结构: 0/3&#10;Tooltip 探针一致性: 0/2"
+                                >
+                                    <span class="score-pill low">0/18</span>
+                                </td>
+                                <td
+                                    title="目标节点反馈: 0/3&#10;节点层区分: 0/4&#10;边层区分: 0/4&#10;非邻接节点弱化: 0/4&#10;高亮语义标记: 0/1&#10;高亮响应可重复: 0/2"
+                                >
+                                    <span class="score-pill low">0/18</span>
+                                </td>
+                                <td
+                                    title="检测到缩放响应: 0/4&#10;缩放幅度: 0/3&#10;缩放变换被记录: 0/2&#10;缩放响应可重复: 0/1"
+                                >
+                                    <span class="score-pill low">0/10</span>
+                                </td>
+                                <td
+                                    title="节点可拖拽: 0/3&#10;拖拽可重复: 0/1&#10;游标反馈: 0/1&#10;控件数量: 0/1&#10;图例说明: 0/1&#10;操作提示: 0/1"
+                                >
+                                    <span class="score-pill low">0/8</span>
+                                </td>
+                                <td
+                                    title="标题层级: 0/1&#10;说明文案: 0/2&#10;辅助信息块: 0/1&#10;控制与摘要入口: 0/0.5&#10;移动端 viewport 元信息: 0.5/0.5&#10;图表可访问性标识: 0/1"
+                                >
+                                    <span class="score-pill low">0.5/6</span>
+                                </td>
+                                <td
+                                    title="背景亮度: 3/3&#10;正文亮度: 2/2&#10;整体明暗对比: 1/1"
+                                >
+                                    <span class="score-pill good">6/6</span>
+                                </td>
+                                <td
+                                    title="无明显横向溢出: 3/3&#10;图区域高度: 0/2&#10;节点保留率: 0/2&#10;移动端元信息: 1/1"
+                                >
+                                    <span class="score-pill low">4/8</span>
+                                </td>
+                                <td>
+                                    <a
+                                        class="link"
+                                        href="glm-5v-turbo.html"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        >查看页面</a
+                                    >
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="panel">
+                <h2>评分细则</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>维度</th>
+                                <th>分值</th>
+                                <th>自动化检测方式</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>渲染稳定性</td>
+                                <td>10</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        检查页面是否稳定完成首次渲染，并且交互探针能够正常工作。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>可交互 SVG 已渲染</strong
+                                            ><span>4 分</span
+                                            ><span
+                                                >存在可见 SVG
+                                                且页面进入可评估状态。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>目标节点可定位</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >自动化能锁定一个真实节点作为后续交互探针。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>节点达到最低可用量</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >可见节点数达到基础可用阈值。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>边达到最低可用量</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >可见边数达到基础可用阈值。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>无 pageerror</strong
+                                            ><span>2 分</span
+                                            ><span>运行期无致命页面异常。</span>
+                                        </li>
+                                        <li>
+                                            <strong>无 console error</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >控制台未出现错误级日志。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>图数据完整度</td>
+                                <td>16</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        评估节点数量、边数量以及图区域是否足够完整。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>节点数量接近 100</strong
+                                            ><span>7 分</span
+                                            ><span
+                                                >对 100
+                                                个随机数据点的还原是否准确。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>边数量充分</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >图结构是否具备足够的连边密度。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>图探针可用</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >自动化可定位中心节点并用于交互探测。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>图区域高度充足</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >图表占据了足够的垂直空间。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>图区域宽度充足</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >图表占据了足够的水平空间。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>Tooltip 交互</td>
+                                <td>18</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        检查悬停反馈是否存在、信息是否丰富、字段是否足够完整。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>悬停后 Tooltip 可见</strong
+                                            ><span>4 分</span
+                                            ><span
+                                                >悬停真实节点后出现
+                                                Tooltip。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>Tooltip 可重复触发</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >多次独立探测时 Tooltip
+                                                能稳定出现，而不是只偶发成功。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>Tooltip 文本长度</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >Tooltip
+                                                提供了足够的信息量，而不是只显示一个短标签。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>Tooltip 字段丰富度</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >Tooltip
+                                                中包含多行、多块或多字段信息。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>Tooltip 信息结构</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >Tooltip
+                                                不是单一值，而是能读出多项语义信息。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>Tooltip 探针一致性</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >页面中存在稳定的 Tooltip
+                                                容器或明确唯一的候选。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>邻接高亮</td>
+                                <td>18</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        检查点击后是否能区分目标节点、相邻节点与非相邻节点。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>目标节点反馈</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >被点击节点自身出现明显状态变化。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>节点层区分</strong
+                                            ><span>4 分</span
+                                            ><span
+                                                >节点样式在点击后出现充分变化。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>边层区分</strong
+                                            ><span>4 分</span
+                                            ><span
+                                                >连边样式在点击后出现足够变化。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>非邻接节点弱化</strong
+                                            ><span>4 分</span
+                                            ><span
+                                                >非相邻节点被显著弱化或降低透明度。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>高亮语义标记</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >存在
+                                                highlighted/selected/active
+                                                等可识别语义类。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>高亮响应可重复</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >多次独立点击探测时，高亮响应能稳定复现。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>缩放能力</td>
+                                <td>10</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        检查滚轮缩放是否生效、变化是否明显，以及能否稳定复现。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>检测到缩放响应</strong
+                                            ><span>4 分</span
+                                            ><span
+                                                >对图区域滚轮操作后容器状态发生变化。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>缩放幅度</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >缩放比例的变化足够明显。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>缩放变换被记录</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >transform / viewBox
+                                                等状态明显变化。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>缩放响应可重复</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >多次独立滚轮探测时，缩放都能稳定出现。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>交互完整度</td>
+                                <td>8</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        奖励更完整的交互体验，例如拖拽、控件、图例和操作提示。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>节点可拖拽</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >拖拽真实节点后，节点位置出现清晰位移。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>拖拽可重复</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >多次独立拖拽探测时，节点拖动能稳定成功。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>游标反馈</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >图区域或节点使用 pointer / grab
+                                                / move 等交互型游标。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>控件数量</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >存在两个或以上明确控制入口，例如按钮或摘要操作。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>图例说明</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >页面存在图例或分组说明，帮助理解图中类别。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>操作提示</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >页面明确提示用户如何缩放、拖拽、点击或悬停。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>信息架构</td>
+                                <td>6</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        检查页面是否提供标题、说明、辅助信息与基础可访问性。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>标题层级</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >存在明确标题或标题层级。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>说明文案</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >提供足够的说明、帮助或上下文文案。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>辅助信息块</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >提供统计、面板、摘要等辅助信息块。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>控制与摘要入口</strong
+                                            ><span>0.5 分</span
+                                            ><span
+                                                >存在按钮、链接或摘要式操作入口。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong
+                                                >移动端 viewport 元信息</strong
+                                            ><span>0.5 分</span
+                                            ><span
+                                                >声明了
+                                                viewport，便于移动端正确缩放。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>图表可访问性标识</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >为 SVG 或图表区域提供 ARIA
+                                                语义。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>暗色主题</td>
+                                <td>6</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        检查背景是否足够深、正文是否足够亮、整体对比是否达标。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>背景亮度</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >截图采样的平均背景亮度足够低。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>正文亮度</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >正文颜色足够亮，能够形成暗色界面阅读对比。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>整体明暗对比</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >背景与文本之间保持足够的亮度差。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>移动端适配</td>
+                                <td>8</td>
+                                <td>
+                                    <div class="rubric-detail">
+                                        在 390px
+                                        宽视口下检查溢出、图高度、节点保留率和基础元信息。
+                                    </div>
+                                    <ul class="rubric-subitems">
+                                        <li>
+                                            <strong>无明显横向溢出</strong
+                                            ><span>3 分</span
+                                            ><span
+                                                >移动端滚动宽度与视口宽度接近。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>图区域高度</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >移动端仍保留足够的图表高度。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>节点保留率</strong
+                                            ><span>2 分</span
+                                            ><span
+                                                >移动端仍能看到足够数量的节点。</span
+                                            >
+                                        </li>
+                                        <li>
+                                            <strong>移动端元信息</strong
+                                            ><span>1 分</span
+                                            ><span
+                                                >页面声明了
+                                                viewport，利于移动端布局。</span
+                                            >
+                                        </li>
+                                    </ul>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </body>
 </html>

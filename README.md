@@ -19,6 +19,7 @@
 - Tooltip 是否能稳定触发
 - 点击后相邻节点高亮是否清楚
 - 缩放是否有效
+- 节点拖拽、图例、控件与操作提示是否完整
 - 信息架构是否完整
 - 页面视觉与响应式表现
 
@@ -88,6 +89,7 @@ node --test --test-concurrency=4 tests/evaluate-models.test.mjs tests/evaluate-m
 这些测试主要覆盖：
 
 - 评分与聚合逻辑
+- 新增维度与子项是否正确计分
 - CLI 参数解析
 - 并行限制
 - 进度输出格式
