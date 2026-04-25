@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Force-Directed Graph</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a12;
+    color: #c9d1d9;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+  }
+
+  .container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .header {
+    position: absolute;
+    top: 28px;
+    left: 32px;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .header h1 {
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    color: #e8eaed;
+  }
+
+  .header span {
+    font-size: 12px;
+    color: #8b949e;
+    display: block;
+    margin-top: 2px;
+  }
+
+  .graph-svg {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+
+  .graph-svg:active {
+    cursor: grabbing;
+  }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(18, 18, 32, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    z-index: 20;
+    transition: opacity 0.15s ease;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .tooltip-id {
+    color: #e8eaed;
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .tooltip-row {
+    color: #8b949e;
+    display: flex;
+    gap: 6px;
+  }
+
+  .tooltip-row strong {
+    color: #c9d1d9;
+    font-weight: 500;
+  }
+
+  .legend {
+    position: absolute;
+    bottom: 28px;
+    right: 32px;
+    z-index: 10;
+    display: flex;
+    gap: 18px;
+    pointer-events: none;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #8b949e;
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+const { useState, useEffect, useRef, useCallback, useMemo, createElement: h, Fragment } = React;
+
+// ── Data generation ────────────────────────────────────────────────
+
+const COLORS = ['#6c8cff', '#5eead4', '#f59e0b', '#f472b6', '#a78bfa'];
+const NODE_COUNT = 100;
+
+function generateData() {
+  const nodes = Array.from({ length: NODE_COUNT }, (_, i) => ({
+    id: i,
+    group: Math.floor(Math.random() * COLORS.length),
+  }));
+
+  // Spanning tree for guaranteed connectivity
+  const links = [];
+  const connected = new Set([0]);
+  const unconnected = new Set(nodes.slice(1).map((n) => n.id));
+
+  while (unconnected.size > 0) {
+    const src = [...connected][Math.floor(Math.random() * connected.size)];
+    const tgt = [...unconnected][Math.floor(Math.random() * unconnected.size)];
+    links.push({ source: src, target: tgt });
+    connected.add(tgt);
+    unconnected.delete(tgt);
+  }
+
+  // Extra random edges
+  const existing = new Set(links.map((l) => `${l.source}-${l.target}`));
+  const extraCount = Math.floor(NODE_COUNT * 1.4);
+
+  for (let i = 0; i < extraCount; i++) {
+    const a = Math.floor(Math.random() * NODE_COUNT);
+    const b = Math.floor(Math.random() * NODE_COUNT);
+    if (a !== b && !existing.has(`${a}-${b}`) && !existing.has(`${b}-${a}`)) {
+      links.push({ source: a, target: b });
+      existing.add(`${a}-${b}`);
+    }
+  }
+
+  return { nodes, links };
+}
+
+const data = generateData();
+
+// Build an adjacency map for quick neighbor lookup
+const adjacency = {};
+data.nodes.forEach((n) => { adjacency[n.id] = new Set(); });
+data.links.forEach((l) => {
+  const s = l.source?.id ?? l.source;
+  const t = l.target?.id ?? l.target;
+  adjacency[s].add(t);
+  adjacency[t].add(s);
+});
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function getLinkEndpoints(link) {
+  return {
+    sourceId: typeof link.source === 'object' ? link.source.id : link.source,
+    targetId: typeof link.target === 'object' ? link.target.id : link.target,
+  };
+}
+
+// ── ForceGraph Component ────────────────────────────────────────────
+
+function ForceGraph() {
+  const svgRef = useRef(null);
+  const simRef = useRef(null);
+  const containerRef = useRef(null);
+
+  const [positions, setPositions] = useState({});
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+
+  // ── Initialize simulation ──
+
+  useEffect(() => {
+    const rect = containerRef.current.getBoundingClientRect();
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+
+    const sim = d3
+      .forceSimulation(data.nodes)
+      .force(
+        'link',
+        d3
+          .forceLink(data.links)
+          .id((d) => d.id)
+          .distance(55)
+      )
+      .force('charge', d3.forceManyBody().strength(-140))
+      .force('center', d3.forceCenter(cx, cy))
+      .force('collide', d3.forceCollide(14))
+      .on('tick', () => {
+        const next = {};
+        data.nodes.forEach((n) => {
+          next[n.id] = { x: n.x, y: n.y };
+        });
+        setPositions(next);
+      });
+
+    simRef.current = sim;
+    return () => sim.stop();
+  }, []);
+
+  // ── Zoom ──
+
+  useEffect(() => {
+    const svg = d3.select(svgRef.current);
+    const zoom = d3
+      .zoom()
+      .scaleExtent([0.15, 4])
+      .on('zoom', (event) => {
+        setTransform({
+          x: event.transform.x,
+          y: event.transform.y,
+          k: event.transform.k,
+        });
+      });
+
+    svg.call(zoom);
+    return () => { svg.on('.zoom', null); };
+  }, []);
+
+  // ── Derived highlighted sets ──
+
+  const neighborSet = useMemo(() => {
+    if (selectedNode === null) return null;
+    return new Set(adjacency[selectedNode]);
+  }, [selectedNode]);
+
+  // ── Handlers ──
+
+  const handleNodeClick = useCallback(
+    (nodeId, e) => {
+      e.stopPropagation();
+      setSelectedNode((prev) => (prev === nodeId ? null : nodeId));
+    },
+    []
+  );
+
+  const handleBgClick = useCallback(() => {
+    setSelectedNode(null);
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    setMousePos({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleNodeEnter = useCallback((nodeId) => {
+    setHoveredNode(nodeId);
+  }, []);
+
+  const handleNodeLeave = useCallback(() => {
+    setHoveredNode(null);
+  }, []);
+
+  // ── Node radius ──
+
+  const getNodeRadius = useCallback(
+    (nodeId) => {
+      if (selectedNode === nodeId) return 8;
+      if (hoveredNode === nodeId) return 7;
+      if (neighborSet && neighborSet.has(nodeId)) return 6;
+      return 5;
+    },
+    [selectedNode, hoveredNode, neighborSet]
+  );
+
+  const getNodeOpacity = useCallback(
+    (nodeId) => {
+      if (selectedNode === null) return 1;
+      if (selectedNode === nodeId || (neighborSet && neighborSet.has(nodeId))) return 1;
+      return 0.12;
+    },
+    [selectedNode, neighborSet]
+  );
+
+  const getLinkOpacity = useCallback(
+    (link) => {
+      if (selectedNode === null) return 0.07;
+      const { sourceId, targetId } = getLinkEndpoints(link);
+      if (sourceId === selectedNode || targetId === selectedNode) return 0.35;
+      return 0.03;
+    },
+    [selectedNode]
+  );
+
+  const getLinkWidth = useCallback(
+    (link) => {
+      if (selectedNode === null) return 1;
+      const { sourceId, targetId } = getLinkEndpoints(link);
+      return sourceId === selectedNode || targetId === selectedNode ? 1.8 : 0.8;
+    },
+    [selectedNode]
+  );
+
+  // ── Render ──
+
+  return h(
+    'div',
+    {
+      ref: containerRef,
+      className: 'container',
+    },
+
+    /* Tooltip */
+    hoveredNode !== null &&
+      h(
+        'div',
+        {
+          className: 'tooltip',
+          style: {
+            left: mousePos.x + 16,
+            top: mousePos.y - 10,
+            opacity: hoveredNode !== null ? 1 : 0,
+          },
+        },
+        h('div', { className: 'tooltip-id' }, `Node #${hoveredNode}`),
+        h(
+          'div',
+          { className: 'tooltip-row' },
+          h('strong', null, 'Connections:'),
+          ` ${adjacency[hoveredNode]?.size ?? 0}`
+        ),
+        h(
+          'div',
+          { className: 'tooltip-row' },
+          h('strong', null, 'Group:'),
+          ` ${data.nodes[hoveredNode]?.group + 1}`
+        )
+      ),
+
+    /* Header */
+    h(
+      'div',
+      { className: 'header' },
+      h('h1', null, 'Force-Directed Graph'),
+      h('span', null, `${data.nodes.length} nodes  ·  ${data.links.length} edges`)
+    ),
+
+    /* Legend */
+    h(
+      'div',
+      { className: 'legend' },
+      COLORS.map((color, i) =>
+        h(
+          'div',
+          { className: 'legend-item', key: color },
+          h('span', { className: 'legend-dot', style: { background: color } }),
+          `Group ${i + 1}`
+        )
+      )
+    ),
+
+    /* SVG */
+    h(
+      'svg',
+      {
+        ref: svgRef,
+        className: 'graph-svg',
+        onClick: handleBgClick,
+        onMouseMove: handleMouseMove,
+      },
+      h(
+        'defs',
+        null,
+        COLORS.map((color) =>
+          h(
+            'filter',
+            { key: `glow-${color}`, id: `glow-${color.replace('#', '')}` },
+            h('feGaussianBlur', { stdDeviation: '2.5', result: 'blur' }),
+            h('feMerge', null,
+              h('feMergeNode', { in: 'blur' }),
+              h('feMergeNode', { in: 'SourceGraphic' })
+            )
+          )
+        )
+      ),
+      h(
+        'g',
+        {
+          transform: `translate(${transform.x},${transform.y}) scale(${transform.k})`,
+        },
+
+        /* Links */
+        h(
+          'g',
+          null,
+          data.links.map((link, i) => {
+            const { sourceId, targetId } = getLinkEndpoints(link);
+            const sp = positions[sourceId];
+            const tp = positions[targetId];
+            if (!sp || !tp) return null;
+
+            return h('line', {
+              key: i,
+              x1: sp.x,
+              y1: sp.y,
+              x2: tp.x,
+              y2: tp.y,
+              stroke: 'rgba(255,255,255,1)',
+              strokeOpacity: getLinkOpacity(link),
+              strokeWidth: getLinkWidth(link),
+              style: { transition: 'stroke-opacity 0.3s ease, stroke-width 0.3s ease' },
+            });
+          })
+        ),
+
+        /* Nodes */
+        h(
+          'g',
+          null,
+          data.nodes.map((node) => {
+            const pos = positions[node.id];
+            if (!pos) return null;
+            const { x, y } = pos;
+            const r = getNodeRadius(node.id);
+            const opacity = getNodeOpacity(node.id);
+            const color = COLORS[node.group];
+            const isSelected = selectedNode === node.id;
+            const isNeighbor = neighborSet && neighborSet.has(node.id);
+
+            return h(
+              'g',
+              { key: node.id, style: { transition: 'opacity 0.3s ease' } },
+
+              /* Glow ring for selected node */
+              isSelected &&
+                h('circle', {
+                  cx: x,
+                  cy: y,
+                  r: r + 6,
+                  fill: 'none',
+                  stroke: color,
+                  strokeWidth: 2,
+                  style: { animation: 'pulse-ring 2s ease-in-out infinite' },
+                }),
+
+              /* Glow ring for neighbor nodes */
+              isNeighbor && !isSelected &&
+                h('circle', {
+                  cx: x,
+                  cy: y,
+                  r: r + 3,
+                  fill: color,
+                  opacity: 0.15,
+                }),
+
+              /* Main node circle */
+              h('circle', {
+                cx: x,
+                cy: y,
+                r: r,
+                fill: color,
+                opacity: opacity,
+                filter: isSelected || hoveredNode === node.id
+                  ? `url(#glow-${color.replace('#', '')})`
+                  : undefined,
+                style: {
+                  cursor: 'pointer',
+                  transition: 'r 0.2s ease, opacity 0.3s ease',
+                },
+                onClick: (e) => handleNodeClick(node.id, e),
+                onMouseEnter: () => handleNodeEnter(node.id),
+                onMouseLeave: handleNodeLeave,
+              })
+            );
+          })
+        )
+      )
+    )
+  );
+}
+
+// ── App Shell ───────────────────────────────────────────────────────
+
+function App() {
+  return h(ForceGraph, null);
+}
+
+// ── Mount ───────────────────────────────────────────────────────────
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(h(App, null));
+</script>
+
+<style>
+  @keyframes pulse-ring {
+    0%, 100% { opacity: 0.15; stroke-width: 1.5; }
+    50% { opacity: 0.5; stroke-width: 2.5; }
+  }
+</style>
+</body>
+</html>
